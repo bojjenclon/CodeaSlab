@@ -1,230 +1,204 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local Stats = {}
 
 local insert = table.insert
 local max = math.max
 
-local Data = {}
-local Pending = {}
-local Enabled = false
-local QueueEnabled = false
-local QueueDisable = false
-local Id = 1
-local QueueFlush = false
-local FrameNumber = 0
+local data = {}
+local pending = {}
+local enabled = false
+local queue_enabled = false
+local queue_disabled = false
+local id = 1
+local queue_flush = false
+local frame_number = 0
 
-local function GetCategory(Category)
-	assert(Category ~= nil, "Nil category given to Stats system.")
-	assert(Category ~= '', "Empty category given to Stats system.")
-	assert(type(Category) == 'string', "Category given is not of type string. Type given is '" .. type(Category) .. "'.")
+local function get_category(category)
+	assert(category ~= nil, "Nil category given to Stats system.")
+	assert(category ~= "", "Empty category given to Stats system.")
+	assert(type(category) == "string", "category given is not of t string. t given is '" .. type(category) .. "'.")
 
-	if Data[Category] == nil then
-		Data[Category] = {}
+	if data[category] == nil then
+		data[category] = {}
 	end
 
-	return Data[Category]
+	return data[category]
 end
 
-local function ResetCategory(Category)
-	local Instance = Data[Category]
+local function reset_category(category)
+	local instance = data[category]
 
-	if Instance ~= nil then
-		for K, V in pairs(Instance) do
-			V.LastTime = V.Time
-			V.LastCallCount = V.CallCount
-			V.MaxTime = max(V.MaxTime, V.Time)
-			V.Time = 0.0
-			V.CallCount = 0
+	if instance ~= nil then
+		for k, v in pairs(instance) do
+			v.last_time = v.time
+			v.last_call_count = v.call_count
+			v.max_time = max(v.max_time, v.time)
+			v.time = 0.0
+			v.call_count = 0
 		end
 	end
 end
 
-local function GetItem(Name, Category)
-	assert(Name ~= nil, "Nil name given to Stats system.")
-	assert(Name ~= '', "Empty name given to Stats system.")
+local function get_item(name, category)
+	assert(name ~= nil, "Nil name given to Stats system.")
+	assert(name ~= "", "Empty name given to Stats system.")
 
-	local Cat = GetCategory(Category)
+	local cat = get_category(category)
 
-	if Cat[Name] == nil then
-		local Instance = {}
-		Instance.Time = 0.0
-		Instance.MaxTime = 0.0
-		Instance.CallCount = 0
-		Instance.LastTime = 0.0
-		Instance.LastCallCount = 0.0
-		Cat[Name] = Instance
+	if cat[name] == nil then
+		local instance = {}
+		instance.time = 0.0
+		instance.max_time = 0.0
+		instance.call_count = 0
+		instance.last_time = 0.0
+		instance.last_call_count = 0.0
+		cat[name] = instance
 	end
 
-	return Cat[Name]
+	return cat[name]
 end
 
-function Stats.Begin(Name, Category)
-	if not Enabled then
+function Stats.begin(name, category)
+	if not enabled then
 		return
 	end
 
-	local Handle = Id
-	Id = Id + 1
+	local handle = id
+	id = id + 1
 
-	local Instance = {StartTime = love.timer.getTime(), Name = Name, Category = Category}
-	Pending[Handle] = Instance
+	local instance = {start_time = ElapsedTime, name = name, category = category}
+	pending[handle] = instance
 
-	return Handle
+	return handle
 end
 
-function Stats.End(Handle)
-	if not Enabled then
+function Stats.finish(handle)
+	if not enabled then
 		return
 	end
 
-	assert(Handle ~= nil, "Nil handle given to Stats.End.")
+	assert(handle ~= nil, "Nil handle given to Stats.finish.")
 
-	local Instance = Pending[Handle]
-	assert(Instance ~= nil, "Invalid handle given to Stats.End.")
-	Pending[Handle] = nil
+	local instance = pending[handle]
+	assert(instance ~= nil, "Invalid handle given to Stats.finish.")
+	pending[handle] = nil
 
-	local Elapsed = love.timer.getTime() - Instance.StartTime
+	local elapsed = ElapsedTime - instance.start_time
 
-	local Item = GetItem(Instance.Name, Instance.Category)
-	Item.CallCount = Item.CallCount + 1
-	Item.Time = Item.Time + Elapsed
+	local item = get_item(instance.name, instance.category)
+	item.call_count = item.call_count + 1
+	item.time = item.time + elapsed
 end
 
-function Stats.GetTime(Name, Category)
-	if not Enabled then
+function Stats.get_time(name, category)
+	if not enabled then
 		return 0.0
 	end
 
-	local Item = GetItem(Name, Category)
+	local item = get_item(name, category)
 
-	return Item.Time > 0.0 and Item.Time or Item.LastTime
+	return item.time > 0.0 and item.time or item.last_time
 end
 
-function Stats.GetMaxTime(Name, Category)
-	if not Enabled then
+function Stats.get_max_time(name, category)
+	if not enabled then
 		return 0.0
 	end
 
-	local Item = GetItem(Name, Category)
+	local item = get_item(name, category)
 
-	return Item.MaxTime
+	return item.max_time
 end
 
-function Stats.GetCallCount(Name, Category)
-	if not Enabled then
+function Stats.get_call_count(name, category)
+	if not enabled then
 		return 0
 	end
 
-	local Item = GetItem(Name, Category)
-	
-	return Item.CallCount > 0 and Item.CallCount or Item.LastCallCount
+	local item = get_item(name, category)
+
+	return item.call_count > 0 and item.call_count or item.last_call_count
 end
 
-function Stats.Reset()
-	FrameNumber = FrameNumber + 1
+function Stats.reset()
+	frame_number = frame_number + 1
 
-	if QueueEnabled then
-		Enabled = true
-		QueueEnabled = false
+	if queue_enabled then
+		enabled = true
+		queue_enabled = false
 	end
 
-	if QueueDisable then
-		Enabled = false
-		QueueDisable = false
+	if queue_disabled then
+		enabled = false
+		queue_disabled = false
 	end
 
-	if QueueFlush then
-		Data = {}
-		Pending = {}
-		Id = 1
-		QueueFlush = false
+	if queue_flush then
+		data = {}
+		pending = {}
+		id = 1
+		queue_flush = false
 	end
 
-	if not Enabled then
+	if not enabled then
 		return
 	end
 
-	local Message = nil
-	for K, V in pairs(Pending) do
-		if Message == nil then
-			Message = "Stats.End were not called for the given stats: \n"
+	local message = nil
+	for k, v in pairs(pending) do
+		if message == nil then
+			message = "Stats.finish were not called for the given stats: \n"
 		end
 
-		Message = Message .. "\t" .. tostring(V.Name) .. " in " .. tostring(V.Category) .. "\n"
+		message = message .. "\t" .. tostring(v.name) .. " in " .. tostring(v.category) .. "\n"
 	end
 
-	assert(Message == nil, Message)
+	assert(message == nil, message)
 
-	for K, V in pairs(Data) do
-		ResetCategory(K)
-	end
-end
-
-function Stats.SetEnabled(IsEnabled)
-	QueueEnabled = IsEnabled
-
-	if not QueueEnabled then
-		QueueDisable = true
+	for k, v in pairs(data) do
+		reset_category(k)
 	end
 end
 
-function Stats.IsEnabled()
-	return Enabled
+function Stats.set_enabled(is_enabled)
+	queue_enabled = is_enabled
+
+	if not queue_enabled then
+		queue_disabled = true
+	end
 end
 
-function Stats.GetCategories()
-	local Result = {}
+function Stats.is_enabled()
+	return enabled
+end
 
-	for K, V in pairs(Data) do
-		insert(Result, K)
+function Stats.get_categories()
+	local result = {}
+
+	for k, v in pairs(data) do
+		insert(result, k)
 	end
 
-	return Result
+	return result
 end
 
-function Stats.GetItems(Category)
-	local Result = {}
+function Stats.get_items(category)
+	local result = {}
 
-	local Instance = GetCategory(Category)
+	local instance = get_category(category)
 
-	for K, V in pairs(Instance) do
-		insert(Result, K)
+	for k, v in pairs(instance) do
+		insert(result, k)
 	end
 
-	return Result
+	return result
 end
 
-function Stats.Flush()
-	QueueFlush = true
+function Stats.flush()
+	queue_flush = true
 end
 
-function Stats.GetFrameNumber()
-	return FrameNumber
+function Stats.get_frame_number()
+	return frame_number
 end
 
 return Stats

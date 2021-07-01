@@ -1,284 +1,265 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local max = math.max
 local insert = table.insert
 local remove = table.remove
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local Image = require(SLAB_PATH .. '.Internal.UI.Image')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Region = require(SLAB_PATH .. '.Internal.UI.Region')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Tooltip = require(SLAB_PATH .. '.Internal.UI.Tooltip')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local Image = required("img")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Region = required("Region")
+local Stats = required("Stats")
+local Style = required("Style")
+local text = required("text")
+local tooltip = required("tooltip")
+local Window = required("Window")
 
 local Tree = {}
-local Instances = setmetatable({}, {__mode = "k"})
-local Hierarchy = {}
 
-local Radius = 4.0
+local instances = setmetatable({}, {__mode = "k"})
+local hierarchy = {}
 
-local function GetInstance(Id)
-	local IdString = type(Id) == 'table' and tostring(IdString) or Id
+local radius = 4.0
 
-	if #Hierarchy > 0 then
-		local Top = Hierarchy[1]
-		IdString = Top.Id .. "." .. IdString
+local function get_instance(id)
+	local id_string = type(id) == "table" and tostring(id_string) or id
+
+	if #hierarchy > 0 then
+		local top = hierarchy[1]
+		id_string = top.id .. "." .. id_string
 	end
 
-	if Instances[Id] == nil then
-		local Instance = {}
-		Instance.X = 0.0
-		Instance.Y = 0.0
-		Instance.W = 0.0
-		Instance.H = 0.0
-		Instance.IsOpen = false
-		Instance.WasOpen = false
-		Instance.Id = IdString
-		Instance.StatHandle = nil
-		Instance.TreeR = 0
-		Instance.TreeB = 0
-		Instance.NoSavedSettings = false
-		Instances[Id] = Instance
+	if instances[id] == nil then
+		local instance = {}
+		instance.x = 0.0
+		instance.y = 0.0
+		instance.w = 0.0
+		instance.h = 0.0
+		instance.is_open = false
+		instance.was_open = false
+		instance.id = id_string
+		instance.stat_handle = nil
+		instance.tree_r = 0
+		instance.tree_b = 0
+		instance.no_saved_settings = false
+		instances[id] = instance
 	end
-	return Instances[Id]
+	return instances[id]
 end
 
-function Tree.Begin(Id, Options)
-	local StatHandle = Stats.Begin('Tree', 'Slab')
+function Tree.begin(id, options)
+	local stat_handle = Stats.begin("Tree", "Slab")
 
-	local IsTableId = type(Id) == 'table'
-	local IdLabel = IsTableId and tostring(Id) or Id
+	local is_table_id = type(id) == "table"
+	local id_label = is_table_id and tostring(id) or id
 
-	Options = Options == nil and {} or Options
-	Options.Label = Options.Label == nil and IdLabel or Options.Label
-	Options.Tooltip = Options.Tooltip == nil and "" or Options.Tooltip
-	Options.OpenWithHighlight = Options.OpenWithHighlight == nil and true or OpenWithHighlight
-	Options.Icon = Options.Icon == nil and nil or Options.Icon
-	Options.IconPath = Options.IconPath == nil and nil or Options.IconPath
-	Options.IsSelected = Options.IsSelected == nil and false or Options.IsSelected
-	Options.IsOpen = Options.IsOpen == nil and false or Options.IsOpen
-	Options.NoSavedSettings = Options.NoSavedSettings == nil and IsTableId or (Options.NoSavedSettings and not IsTableId)
+	options = options == nil and {} or options
+	options.label = options.label == nil and id_label or options.label
+	options.tooltip = options.tooltip == nil and "" or options.tooltip
+	options.open_with_highlight = options.open_with_highlight == nil and true or open_with_highlight
+	options.icon = options.icon == nil and nil or options.icon
+	options.icon_path = options.icon_path == nil and nil or options.icon_path
+	options.is_selected = options.is_selected == nil and false or options.is_selected
+	options.is_open = options.is_open == nil and false or options.is_open
+	options.no_saved_settings =
+		options.no_saved_settings == nil and is_table_id or (options.no_saved_settings and not is_table_id)
 
-	local Instance = nil
-	local WinItemId = Window.GetItemId(IdLabel)
+	local instance = nil
+	local win_item_id = Window.get_item_id(id_label)
 
-	if IsTableId then
-		Instance = GetInstance(Id)
+	if is_table_id then
+		instance = get_instance(id)
 	else
-		Instance = GetInstance(WinItemId)
+		instance = get_instance(win_item_id)
 	end
 
-	Instance.WasOpen = Instance.IsOpen
-	Instance.StatHandle = StatHandle
-	Instance.NoSavedSettings = Options.NoSavedSettings
+	instance.was_open = instance.is_open
+	instance.stat_handle = stat_handle
+	instance.no_saved_settings = options.no_saved_settings
 
-	local MouseX, MouseY = Mouse.Position()
-	local TMouseX, TMouseY = Region.InverseTransform(nil, MouseX, MouseY)
-	local WinX, WinY = Window.GetPosition()
-	local WinW, WinH = Window.GetBorderlessSize()
-	local IsObstructed = Window.IsObstructedAtMouse() or Region.IsHoverScrollBar()
-	local W = Text.GetWidth(Options.Label)
-	local H = max(Style.Font:getHeight(), Instance.H)
-	local Diameter = Radius * 2.0
+	local mouse_x, mouse_y = Mouse.position()
+	local t_mouse_x, t_mouse_y = Region.inverse_transform(nil, mouse_x, mouse_y)
+	local win_x, win_y = Window.get_position()
+	local win_w, win_h = Window.get_borderless_size()
+	local is_obstructed = Window.is_obstructed_at_mouse() or Region.is_hover_scroll_bar()
+	local w = Text.get_width(options.label)
+	local h = max(Style.Font:getHeight(), instance.h)
+	local diameter = radius * 2.0
 
-	if not Options.IsLeaf then
-		W = W + Diameter + Radius
+	if not options.is_leaf then
+		w = w + diameter + radius
 	end
 
-	local Icon = Options.Icon
-	if Icon == nil then
-		Icon = Options.IconPath
+	local icon = options.icon
+	if icon == nil then
+		icon = options.icon_path
 	end
 
-	local ImageW, ImageH = Image.GetSize(Icon)
-	W = W + ImageW
-	H = max(H, ImageH)
+	local image_w, image_h = img.get_size(icon)
+	w = w + image_w
+	h = max(h, image_h)
 
-	WinX = WinX + Window.GetBorder()
-	WinY = WinY + Window.GetBorder()
+	win_x = win_x + Window.get_border()
+	win_y = win_y + Window.get_border()
 
-	if #Hierarchy == 0 then
-		local ControlW, ControlH = W, H
-		if Instance.TreeR > 0 and Instance.TreeB > 0 then
-			ControlW = Instance.TreeR - Instance.X
-			ControlH = Instance.TreeB - Instance.Y
+	if #hierarchy == 0 then
+		local control_w, control_h = w, h
+		if instance.tree_r > 0 and instance.tree_b > 0 then
+			control_w = instance.tree_r - instance.x
+			control_h = instance.tree_b - instance.y
 		end
 
-		LayoutManager.AddControl(ControlW, ControlH)
+		LayoutManager.add_control(control_w, control_h)
 
-		Instance.TreeR = 0
-		Instance.TreeB = 0
+		instance.tree_r = 0
+		instance.tree_b = 0
 	end
 
-	local Root = Instance
-	if #Hierarchy > 0 then
-		Root = Hierarchy[#Hierarchy]
+	local root = instance
+	if #hierarchy > 0 then
+		root = hierarchy[#hierarchy]
 	end
 
-	local X, Y = Cursor.GetPosition()
-	if Root ~= Instance then
-		X = Root ~= Instance and (Root.X + Diameter * #Hierarchy)
-		Cursor.SetX(X)
+	local x, y = Cursor.get_position()
+	if root ~= instance then
+		x = root ~= instance and (root.x + diameter * #hierarchy)
+		Cursor.set_x(x)
 	end
-	local TriX, TriY = X + Radius, Y + H * 0.5
+	local tri_x, tri_y = x + radius, y + h * 0.5
 
-	local IsHot = not IsObstructed and WinX <= TMouseX and TMouseX <= WinX + WinW and Y <= TMouseY and TMouseY <= Y + H and Region.Contains(MouseX, MouseY)
+	local is_hot =
+		not is_obstructed and win_x <= t_mouse_x and t_mouse_x <= win_x + win_w and y <= t_mouse_y and t_mouse_y <= y + h and
+		Region.contains(mouse_x, mouse_y)
 
-	if IsHot or Options.IsSelected then
-		DrawCommands.Rectangle('fill', WinX, Y, WinW, H, Style.TextHoverBgColor)
+	if is_hot or options.is_selected then
+		DrawCommands.rectangle("fill", win_x, y, win_w, h, Style.TextHoverBgColor)
 	end
 
-	if IsHot then
-		if Mouse.IsClicked(1) and not Options.IsLeaf and Options.OpenWithHighlight then
-			Instance.IsOpen = not Instance.IsOpen
+	if is_hot then
+		if Mouse.is_clicked(1) and not options.is_leaf and options.open_with_highlight then
+			instance.is_open = not instance.is_open
 		end
 	end
 
-	local IsExpanderClicked = false
-	if not Options.IsLeaf then
-		if not IsObstructed and X <= TMouseX and TMouseX <= X + Diameter and Y <= TMouseY and TMouseY <= Y + H then
-			if Mouse.IsClicked(1) and not Options.OpenWithHighlight then
-				Instance.IsOpen = not Instance.IsOpen
-				Window.SetHotItem(nil)
-				IsExpanderClicked = true
+	local is_expander_clicked = false
+	if not options.is_leaf then
+		if not is_obstructed and x <= t_mouse_x and t_mouse_x <= x + diameter and y <= t_mouse_y and t_mouse_y <= y + h then
+			if Mouse.is_clicked(1) and not options.open_with_highlight then
+				instance.is_open = not instance.is_open
+				Window.set_hot_item(nil)
+				is_expander_clicked = true
 			end
 		end
 
-		local Dir = Instance.IsOpen and 180 or 90
-		DrawCommands.Triangle('fill', TriX, TriY, Radius, Dir, Style.TextColor)
+		local dir = instance.is_open and 180 or 90
+		DrawCommands.triangle("fill", tri_x, tri_y, radius, dir, Style.text_color)
 	end
 
-	if not Instance.IsOpen and Instance.WasOpen then
-		Window.ResetContentSize()
-		Region.ResetContentSize()
+	if not instance.is_open and instance.was_open then
+		Window.reset_content_size()
+		Region.reset_content_size()
 	end
 
-	Cursor.AdvanceX(Diameter)
-	Instance.X = X
-	Instance.Y = Y
-	Instance.W = W
-	Instance.H = H
+	Cursor.advance_x(diameter)
+	instance.x = x
+	instance.y = y
+	instance.w = w
+	instance.h = h
 
-	LayoutManager.Begin('Ignore', {Ignore = true})
+	LayoutManager.begin("ignore", {ignore = true})
 
-	if Options.Icon ~= nil or Options.IconPath ~= nil then
-		Image.Begin(Instance.Id .. '_Icon', {
-			Image = Options.Icon,
-			Path = Options.IconPath
-		})
+	if options.icon ~= nil or options.icon_path ~= nil then
+		Image.begin(
+			instance.id .. "_Icon",
+			{
+				img = options.icon,
+				path = options.icon_path
+			}
+		)
 
-		local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-		Instance.H = max(Instance.H, ItemH)
-		Cursor.SameLine({CenterY = true})
+		local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+		instance.h = max(instance.h, item_h)
+		Cursor.same_line({center_y = true})
 	end
 
-	Text.Begin(Options.Label)
+	Text.begin(options.label)
 
-	LayoutManager.End()
+	LayoutManager.finish()
 
-	local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-	Root.TreeR = max(Root.TreeR, ItemX + ItemW)
-	Root.TreeB = max(Root.TreeB, Y + H)
+	local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+	root.tree_r = max(root.tree_r, item_x + item_w)
+	root.tree_b = max(root.tree_b, y + h)
 
-	Cursor.SetY(Instance.Y)
-	Cursor.AdvanceY(H)
+	Cursor.set_y(instance.y)
+	Cursor.advance_y(h)
 
-	if Options.IsOpen then
-		Instance.IsOpen = true
+	if options.is_open then
+		instance.is_open = true
 	end
 
-	if Instance.IsOpen then
-		insert(Hierarchy, 1, Instance)
+	if instance.is_open then
+		insert(hierarchy, 1, instance)
 	end
 
-	if IsHot then
-		Tooltip.Begin(Options.Tooltip)
+	if is_hot then
+		Tooltip.begin(options.tooltip)
 
-		if not IsExpanderClicked then
-			Window.SetHotItem(WinItemId)
+		if not is_expander_clicked then
+			Window.set_hot_item(win_item_id)
 		end
 	end
 
-	-- The size of the item has already been determined by Text.Begin. However, this item's ID needs to be
+	-- The size of the item has already been determined by Text.begin. However, this item's ID needs to be
 	-- set as the last item for hot item checks. So the item will be added with zero width and height.
-	Window.AddItem(X, Y, 0, 0, WinItemId)
+	Window.add_item(x, y, 0, 0, win_item_id)
 
-	if not Instance.IsOpen then
-		Stats.End(Instance.StatHandle)
+	if not instance.is_open then
+		Stats.finish(instance.stat_handle)
 	end
 
-	return Instance.IsOpen
+	return instance.is_open
 end
 
-function Tree.End()
-	local StatHandle = Hierarchy[1].StatHandle
-	remove(Hierarchy, 1)
-	Stats.End(StatHandle)
+function Tree.finish()
+	local stat_handle = hierarchy[1].stat_handle
+	remove(hierarchy, 1)
+	Stats.finish(stat_handle)
 end
 
-function Tree.Save(Table)
-	if Table ~= nil then
-		local Settings = {}
-		for K, V in pairs(Instances) do
-			if not V.NoSavedSettings then
-				Settings[V.Id] = {
-					IsOpen = V.IsOpen
+function Tree.save(tbl)
+	if tbl ~= nil then
+		local settings = {}
+		for k, v in pairs(instances) do
+			if not v.no_saved_settings then
+				settings[v.id] = {
+					is_open = v.is_open
 				}
 			end
 		end
-		Table['Tree'] = Settings
+		tbl["Tree"] = settings
 	end
 end
 
-function Tree.Load(Table)
-	if Table ~= nil then
-		local Settings = Table['Tree']
-		if Settings ~= nil then
-			for K, V in pairs(Settings) do
-				local Instance = GetInstance(K)
-				Instance.IsOpen = V.IsOpen
+function Tree.load(tbl)
+	if tbl ~= nil then
+		local settings = tbl["Tree"]
+		if settings ~= nil then
+			for k, v in pairs(settings) do
+				local instance = get_instance(k)
+				instance.is_open = v.is_open
 			end
 		end
 	end
 end
 
-function Tree.GetDebugInfo()
-	local Result = {}
+function Tree.get_debug_info()
+	local result = {}
 
-	for K, V in pairs(Instances) do
-		table.insert(Result, tostring(K))
+	for k, v in pairs(instances) do
+		table.insert(result, tostring(k))
 	end
 
-	return Result
+	return result
 end
 
 return Tree

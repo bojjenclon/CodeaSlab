@@ -1,64 +1,38 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 local remove = table.remove
 local max = math.max
 local min = math.min
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local Window = required("Window")
 
 local LayoutManager = {}
 
-local Instances = {}
-local Stack = {}
-local Active = nil
+local instances = {}
+local stack = {}
+local active = nil
 
-local function GetWindowBounds()
-	local WinX, WinY, WinW, WinH = Window.GetBounds(true)
-	local Border = Window.GetBorder()
+local function get_window_bounds()
+	local win_x, win_y, win_w, win_h = Window.get_bounds(true)
+	local border = Window.get_border()
 
-	WinX = WinX + Border
-	WinY = WinY + Border
-	WinW = WinW - Border * 2
-	WinH = WinH - Border * 2
+	win_x = win_x + border
+	win_y = win_y + border
+	win_w = win_w - border * 2
+	win_h = win_h - border * 2
 
-	return WinX, WinY, WinW, WinH
+	return win_x, win_y, win_w, win_h
 end
 
-local function GetRowSize(Instance)
-	if Instance ~= nil then
-		local Column = Instance.Columns[Instance.ColumnNo]
+local function get_row_size(instance)
+	if instance ~= nil then
+		local column = instance.columns[instance.column_no]
 
-		if Column.Rows ~= nil then
-			local Row = Column.Rows[Column.RowNo]
+		if column.rows ~= nil then
+			local row = column.rows[column.row_no]
 
-			if Row ~= nil then
-				return Row.W, Row.H
+			if row ~= nil then
+				return row.w, row.h
 			end
 		end
 	end
@@ -66,15 +40,15 @@ local function GetRowSize(Instance)
 	return 0, 0
 end
 
-local function GetRowCursorPos(Instance)
-	if Instance ~= nil then
-		local Column = Instance.Columns[Instance.ColumnNo]
+local function get_row_cursor_pos(instance)
+	if instance ~= nil then
+		local column = instance.columns[instance.column_no]
 
-		if Column.Rows ~= nil then
-			local Row = Column.Rows[Column.RowNo]
+		if column.rows ~= nil then
+			local row = column.rows[column.row_no]
 
-			if Row ~= nil then
-				return Row.CursorX, Row.CursorY
+			if row ~= nil then
+				return row.cursor_x, row.cursor_y
 			end
 		end
 	end
@@ -82,439 +56,442 @@ local function GetRowCursorPos(Instance)
 	return nil, nil
 end
 
-local function GetLayoutH(Instance, IncludePad)
-	IncludePad = IncludePad == nil and true or IncludePad
+local function get_layout_h(instance, include_pad)
+	include_pad = include_pad == nil and true or include_pad
 
-	if Instance ~= nil then
-		local Column = Instance.Columns[Instance.ColumnNo]
+	if instance ~= nil then
+		local column = instance.columns[instance.column_no]
 
-		if Column.Rows ~= nil then
-			local H = 0
+		if column.rows ~= nil then
+			local h = 0
 
-			for I, V in ipairs(Column.Rows) do
-				H = H + V.H
+			for i, v in ipairs(column.rows) do
+				h = h + v.h
 
-				if IncludePad then
-					H = H + Cursor.PadY()
+				if include_pad then
+					h = h + Cursor.pad_y()
 				end
 			end
 
-			return H
+			return h
 		end
 	end
 
 	return 0
 end
 
-local function GetPreviousRowBottom(Instance)
-	if Instance ~= nil then
-		local Column = Instance.Columns[Instance.ColumnNo]
+local function get_previous_row_bottom(instance)
+	if instance ~= nil then
+		local column = instance.columns[instance.column_no]
 
-		if Column.Rows ~= nil and Column.RowNo > 1 and Column.RowNo <= #Column.Rows then
-			local Y = Column.Rows[Column.RowNo - 1].CursorY
-			local H = Column.Rows[Column.RowNo - 1].H
-			return Y + H
+		if column.rows ~= nil and column.row_no > 1 and column.row_no <= #column.rows then
+			local y = column.rows[column.row_no - 1].cursor_y
+			local h = column.rows[column.row_no - 1].h
+			return y + h
 		end
 	end
 
 	return nil
 end
 
-local function GetColumnPosition(Instance)
-	if Instance ~= nil then
-		local WinX, WinY, WinW, WinH = GetWindowBounds()
-		local WinL, WinT = Window.GetPosition()
-		local Count = #Instance.Columns
-		local ColumnW = WinW / Count
-		local TotalW = 0
+local function get_column_position(instance)
+	if instance ~= nil then
+		local win_x, win_y, win_w, win_h = get_window_bounds()
+		local win_l, win_t = Window.get_position()
+		local count = #instance.columns
+		local column_w = win_w / count
+		local total_w = 0
 
-		for I = 1, Instance.ColumnNo - 1, 1 do
-			local Column = Instance.Columns[I]
-			TotalW = TotalW + Column.W
+		for i = 1, instance.column_no - 1, 1 do
+			local column = instance.columns[i]
+			total_w = total_w + column.w
 		end
 
-		local AnchorX, AnchorY = Instance.X, Instance.Y
+		local anchor_x, anchor_y = instance.x, instance.y
 
-		if not Instance.AnchorX then
-			AnchorX = WinX - WinL - Window.GetBorder()
+		if not instance.anchor_x then
+			anchor_x = win_x - win_l - Window.get_border()
 		end
 
-		if not Instance.AnchorY then
-			AnchorY = WinY - WinT - Window.GetBorder()
+		if not instance.anchor_y then
+			anchor_y = win_y - win_t - Window.get_border()
 		end
 
-		return AnchorX + TotalW, AnchorY
+		return anchor_x + total_w, anchor_y
 	end
 
 	return 0, 0
 end
 
-local function GetColumnSize(Instance)
-	if Instance ~= nil then
-		local Column = Instance.Columns[Instance.ColumnNo]
-		local WinX, WinY, WinW, WinH = GetWindowBounds()
-		local Count = #Instance.Columns
-		local ColumnW = WinW / Count
-		local W, H = 0, GetLayoutH(Instance)
+local function get_column_size(instance)
+	if instance ~= nil then
+		local column = instance.columns[instance.column_no]
+		local win_x, win_y, win_w, win_h = get_window_bounds()
+		local count = #instance.columns
+		local column_w = win_w / count
+		local w, h = 0, get_layout_h(instance)
 
-		if not Window.IsAutoSize() then
-			W = ColumnW
-			H = WinH
-			Column.W = W
+		if not Window.is_auto_size() then
+			w = column_w
+			h = win_h
+			column.w = w
 		else
-			W = max(Column.W, ColumnW)
+			w = max(column.w, column_w)
 		end
 
-		return W, H
+		return w, h
 	end
 
 	return 0, 0
 end
 
-local function AddControl(Instance, W, H, Type)
-	if Instance ~= nil then
-		local RowW, RowH = GetRowSize(Instance)
-		local WinX, WinY, WinW, WinH = GetWindowBounds()
-		local CursorX, CursorY = Cursor.GetPosition()
-		local X, Y = GetRowCursorPos(Instance)
-		local LayoutH = GetLayoutH(Instance)
-		local PrevRowBottom = GetPreviousRowBottom(Instance)
-		local AnchorX, AnchorY = GetColumnPosition(Instance)
-		WinW, WinH = GetColumnSize(Instance)
-		local Column = Instance.Columns[Instance.ColumnNo]
+local function add_control(instance, w, h, t)
+	if instance ~= nil then
+		local row_w, row_h = get_row_size(instance)
+		local win_x, win_y, win_w, win_h = get_window_bounds()
+		local cursor_x, cursor_y = Cursor.get_position()
+		local x, y = get_row_cursor_pos(instance)
+		local layout_h = get_layout_h(instance)
+		local prev_row_bottom = get_previous_row_bottom(instance)
+		local anchor_x, anchor_y = get_column_position(instance)
+		win_w, win_h = get_column_size(instance)
+		local column = instance.columns[instance.column_no]
 
-		if RowW == 0 then
-			RowW = W
+		if row_w == 0 then
+			row_w = w
 		end
 
-		if RowH == 0 then
-			RowH = H
+		if row_h == 0 then
+			row_h = h
 		end
 
-		if X == nil then
-			if Instance.AlignX == 'center' then
-				X = max(WinW * 0.5 - RowW * 0.5 + AnchorX, AnchorX)
-			elseif Instance.AlignX == 'right' then
-				local Right = WinW - RowW
-				if not Window.IsAutoSize() then
-					Right = Right + Window.GetBorder()
+		if x == nil then
+			if instance.align_x == "center" then
+				x = max(win_w * 0.5 - row_w * 0.5 + anchor_x, anchor_x)
+			elseif instance.align_x == "right" then
+				local right = win_w - row_w
+				if not Window.is_auto_size() then
+					right = right + Window.get_border()
 				end
 
-				X = max(Right, AnchorX)
+				x = max(right, anchor_x)
 			else
-				X = AnchorX
+				x = anchor_x
 			end
 		end
 
-		if Y == nil then
-			if PrevRowBottom ~= nil then
-				Y = PrevRowBottom + Cursor.PadY()
+		if y == nil then
+			if prev_row_bottom ~= nil then
+				y = prev_row_bottom + Cursor.pad_y()
 			else
-				local RegionH = WinY + WinH - CursorY
-				if Instance.AlignY == 'center' then
-					Y = max(RegionH * 0.5 - LayoutH * 0.5 + AnchorY, AnchorY)
-				elseif Instance.AlignY == 'bottom' then
-					Y = max(WinH - LayoutH, AnchorY)
+				local region_h = win_y + win_h - cursor_y
+				if instance.align_y == "center" then
+					y = max(region_h * 0.5 - layout_h * 0.5 + anchor_y, anchor_y)
+				elseif instance.align_y == "Bottom" then
+					y = max(win_h - layout_h, anchor_y)
 				else
-					Y = AnchorY
+					y = anchor_y
 				end
 			end
 		end
 
-		Cursor.SetX(WinX + X)
-		Cursor.SetY(WinY + Y)
+		Cursor.set_x(win_x + x)
+		Cursor.set_y(win_y + y)
 
-		if H < RowH then
-			if Instance.AlignRowY == 'center' then
-				Cursor.SetY(WinY + Y + RowH * 0.5 - H * 0.5)
-			elseif Instance.AlignRowY == 'bottom' then
-				Cursor.SetY(WinY + Y + RowH - H)
+		if h < row_h then
+			if instance.align_row_y == "center" then
+				Cursor.set_y(win_y + y + row_h * 0.5 - h * 0.5)
+			elseif instance.align_row_y == "Bottom" then
+				Cursor.set_y(win_y + y + row_h - h)
 			end
 		end
 
-		local RowNo = Column.RowNo
+		local row_no = column.row_no
 
-		if Column.Rows ~= nil then
-			local Row = Column.Rows[RowNo]
+		if column.rows ~= nil then
+			local row = column.rows[row_no]
 
-			if Row ~= nil then
-				Row.CursorX = X + W + Cursor.PadX()
-				Row.CursorY = Y
+			if row ~= nil then
+				row.cursor_x = x + w + Cursor.pad_x()
+				row.cursor_y = y
 			end
 		end
 
-		if Column.PendingRows[RowNo] == nil then
-			local Row = {
-				CursorX = nil,
-				CursorY = nil,
-				W = 0,
-				H = 0,
-				RequestH = 0,
-				MaxH = 0,
-				Controls = {}
+		if column.pending_rows[row_no] == nil then
+			local row = {
+				cursor_x = nil,
+				cursor_y = nil,
+				w = 0,
+				h = 0,
+				request_h = 0,
+				max_h = 0,
+				controls = {}
 			}
-			insert(Column.PendingRows, Row)
+			insert(column.pending_rows, row)
 		end
 
-		local Row = Column.PendingRows[RowNo]
+		local row = column.pending_rows[row_no]
 
-		insert(Row.Controls, {
-			X = Cursor.GetX(),
-			Y = Cursor.GetY(),
-			W = W,
-			H = H,
-			AlteredSize = Column.AlteredSize,
-			Type = Type
-		})
-		Row.W = Row.W + W + Cursor.PadX()
-		Row.H = max(Row.H, H)
+		insert(
+			row.controls,
+			{
+				x = Cursor.get_x(),
+				y = Cursor.get_y(),
+				w = w,
+				h = h,
+				altered_size = column.altered_size,
+				t = t
+			}
+		)
+		row.w = row.w + w + Cursor.pad_x()
+		row.h = max(row.h, h)
 
-		Column.RowNo = RowNo + 1
-		Column.AlteredSize = false
-		Column.W = max(Row.W, Column.W)
+		column.row_no = row_no + 1
+		column.altered_size = false
+		column.w = max(row.w, column.w)
 	end
 end
 
-local function GetInstance(Id)
-	local Key = Window.GetId() .. '.' .. Id
+local function get_instance(id)
+	local key = Window.get_id() .. "." .. id
 
-	if Instances[Key] == nil then
-		local Instance = {}
-		Instance.Id = Id
-		Instance.WindowId = Window.GetId()
-		Instance.AlignX = 'left'
-		Instance.AlignY = 'top'
-		Instance.AlignRowY = 'top'
-		Instance.Ignore = false
-		Instance.ExpandW = false
-		Instance.X = 0
-		Instance.Y = 0
-		Instance.Columns = {}
-		Instance.ColumnNo = 1
-		Instances[Key] = Instance
+	if instances[key] == nil then
+		local instance = {}
+		instance.id = id
+		instance.window_id = Window.get_id()
+		instance.align_x = "left"
+		instance.align_y = "top"
+		instance.align_row_y = "top"
+		instance.ignore = false
+		instance.expand_w = false
+		instance.x = 0
+		instance.y = 0
+		instance.columns = {}
+		instance.column_no = 1
+		instances[key] = instance
 	end
 
-	return Instances[Key]
+	return instances[key]
 end
 
-function LayoutManager.AddControl(W, H, Type)
-	if Active ~= nil and not Active.Ignore then
-		AddControl(Active, W, H)
+function LayoutManager.add_control(w, h, t)
+	if active ~= nil and not active.ignore then
+		add_control(active, w, h)
 	end
 end
 
-function LayoutManager.ComputeSize(W, H)
-	if Active ~= nil then
-		local X, Y = GetColumnPosition(Active)
-		local WinW, WinH = GetColumnSize(Active)
-		local RealW = WinW - X
-		local RealH = WinH - Y
-		local Column = Active.Columns[Active.ColumnNo]
+function LayoutManager.compute_size(w, h)
+	if active ~= nil then
+		local x, y = get_column_position(active)
+		local win_w, win_h = get_column_size(active)
+		local real_w = win_w - x
+		local real_h = win_h - y
+		local column = active.columns[active.column_no]
 
-		if not Active.AnchorX then
-			RealW = WinW
+		if not active.anchor_x then
+			real_w = win_w
 		end
 
-		if not Active.AnchorY then
-			RealH = WinH
+		if not active.anchor_y then
+			real_h = win_h
 		end
 
-		if Window.IsAutoSize() then
-			local LayoutH = GetLayoutH(Active, false)
+		if Window.is_auto_size() then
+			local layout_h = get_layout_h(active, false)
 
-			if LayoutH > 0 then
-				RealH = LayoutH
+			if layout_h > 0 then
+				real_h = layout_h
 			end
 		end
 
-		if Active.ExpandW then
-			if Column.Rows ~= nil then
-				local Count = 0
-				local ReduceW = 0
-				local Pad = 0
-				local Row = Column.Rows[Column.RowNo]
-				if Row ~= nil then
-					for I, V in ipairs(Row.Controls) do
-						if V.AlteredSize then
-							Count = Count + 1
+		if active.expand_w then
+			if column.rows ~= nil then
+				local count = 0
+				local reduce_w = 0
+				local pad = 0
+				local row = column.rows[column.row_no]
+				if row ~= nil then
+					for i, v in ipairs(row.controls) do
+						if v.altered_size then
+							count = count + 1
 						else
-							ReduceW = ReduceW + V.W
+							reduce_w = reduce_w + v.w
 						end
 					end
 
-					if #Row.Controls > 1 then
-						Pad = Cursor.PadX() * (#Row.Controls - 1)
+					if #row.controls > 1 then
+						pad = Cursor.pad_x() * (#row.controls - 1)
 					end
 				end
 
-				Count = max(Count, 1)
+				count = max(count, 1)
 
-				W = (RealW - ReduceW - Pad) / Count
+				w = (real_w - reduce_w - pad) / count
 			end
 		end
 
-		if Active.ExpandH then
-			if Column.Rows ~= nil then
-				local Count = 0
-				local ReduceH = 0
-				local Pad = 0
-				local MaxRowH = 0
-				for I, Row in ipairs(Column.Rows) do
-					local IsSizeAltered = false
+		if active.expand_h then
+			if column.rows ~= nil then
+				local count = 0
+				local reduce_h = 0
+				local pad = 0
+				local max_row_h = 0
+				for i, row in ipairs(column.rows) do
+					local is_size_altered = false
 
-					if I == Column.RowNo then
-						MaxRowH = Row.MaxH
-						Row.RequestH = max(Row.RequestH, H)
+					if i == column.row_no then
+						max_row_h = row.max_h
+						row.request_h = max(row.request_h, h)
 					end
 
-					for J, Control in ipairs(Row.Controls) do
-						if Control.AlteredSize then
-							if not IsSizeAltered then
-								Count = Count + 1
-								IsSizeAltered = true
+					for j, control in ipairs(row.controls) do
+						if control.altered_size then
+							if not is_size_altered then
+								count = count + 1
+								is_size_altered = true
 							end
 						end
 					end
 
-					if not IsSizeAltered then
-						ReduceH = ReduceH + Row.H
+					if not is_size_altered then
+						reduce_h = reduce_h + row.h
 					end
 				end
 
-				if #Column.Rows > 1 then
-					Pad = Cursor.PadY() * (#Column.Rows - 1)
+				if #column.rows > 1 then
+					pad = Cursor.pad_y() * (#column.rows - 1)
 				end
 
-				Count = max(Count, 1)
+				count = max(count, 1)
 
-				RealH = max(RealH - ReduceH - Pad, 0)
-				H = max(RealH / Count, H)
-				H = max(H, MaxRowH)
+				real_h = max(real_h - reduce_h - pad, 0)
+				h = max(real_h / count, h)
+				h = max(h, max_row_h)
 			end
 		end
 
-		Column.AlteredSize = Active.ExpandW or Active.ExpandH
+		column.altered_size = active.expand_w or active.expand_h
 	end
 
-	return W, H
+	return w, h
 end
 
-function LayoutManager.Begin(Id, Options)
-	assert(Id ~= nil or type(Id) ~= string, "A valid string Id must be given to BeginLayout!")
+function LayoutManager.begin(id, options)
+	assert(id ~= nil or type(id) ~= string, "a valid string id must be given to begin_layout!")
 
-	Options = Options == nil and {} or Options
-	Options.AlignX = Options.AlignX == nil and 'left' or Options.AlignX
-	Options.AlignY = Options.AlignY == nil and 'top' or Options.AlignY
-	Options.AlignRowY = Options.AlignRowY == nil and 'top' or Options.AlignRowY
-	Options.Ignore = Options.Ignore == nil and false or Options.Ignore
-	Options.ExpandW = Options.ExpandW == nil and false or Options.ExpandW
-	Options.ExpandH = Options.ExpandH == nil and false or Options.ExpandH
-	Options.AnchorX = Options.AnchorX == nil and false or Options.AnchorX
-	Options.AnchorY = Options.AnchorY == nil and true or Options.AnchorY
-	Options.Columns = Options.Columns == nil and 1 or Options.Columns
+	options = options == nil and {} or options
+	options.align_x = options.align_x == nil and "left" or options.align_x
+	options.align_y = options.align_y == nil and "top" or options.align_y
+	options.align_row_y = options.align_row_y == nil and "top" or options.align_row_y
+	options.ignore = options.ignore == nil and false or options.ignore
+	options.expand_w = options.expand_w == nil and false or options.expand_w
+	options.expand_h = options.expand_h == nil and false or options.expand_h
+	options.anchor_x = options.anchor_x == nil and false or options.anchor_x
+	options.anchor_y = options.anchor_y == nil and true or options.anchor_y
+	options.columns = options.columns == nil and 1 or options.columns
 
-	Options.Columns = max(Options.Columns, 1)
+	options.columns = max(options.columns, 1)
 
-	local Instance = GetInstance(Id)
-	Instance.AlignX = Options.AlignX
-	Instance.AlignY = Options.AlignY
-	Instance.AlignRowY = Options.AlignRowY
-	Instance.Ignore = Options.Ignore
-	Instance.ExpandW = Options.ExpandW
-	Instance.ExpandH = Options.ExpandH
-	Instance.X, Instance.Y = Cursor.GetRelativePosition()
-	Instance.AnchorX = Options.AnchorX
-	Instance.AnchorY = Options.AnchorY
+	local instance = get_instance(id)
+	instance.align_x = options.align_x
+	instance.align_y = options.align_y
+	instance.align_row_y = options.align_row_y
+	instance.ignore = options.ignore
+	instance.expand_w = options.expand_w
+	instance.expand_h = options.expand_h
+	instance.x, instance.y = Cursor.get_relative_position()
+	instance.anchor_x = options.anchor_x
+	instance.anchor_y = options.anchor_y
 
-	if Options.Columns ~= #Instance.Columns then
-		Instance.Columns = {}
-		for I = 1, Options.Columns, 1 do
-			local Column = {
-				Rows = nil,
-				PendingRows = {},
-				RowNo = 1,
-				W = 0
+	if options.columns ~= #instance.columns then
+		instance.columns = {}
+		for i = 1, options.columns, 1 do
+			local column = {
+				rows = nil,
+				pending_rows = {},
+				row_no = 1,
+				w = 0
 			}
 
-			insert(Instance.Columns, Column)
+			insert(instance.columns, column)
 		end
 	end
 
-	for I, Column in ipairs(Instance.Columns) do
-		Column.PendingRows = {}
-		Column.RowNo = 1
+	for i, column in ipairs(instance.columns) do
+		column.pending_rows = {}
+		column.row_no = 1
 	end
 
-	insert(Stack, 1, Instance)
-	Active = Instance
+	insert(stack, 1, instance)
+	active = instance
 end
 
-function LayoutManager.End()
-	assert(Active ~= nil, "LayoutManager.End was called without a call to LayoutManager.Begin!")
+function LayoutManager.finish()
+	assert(active ~= nil, "LayoutManager.finish was called without a call to LayoutManager.begin!")
 
-	for I, Column in ipairs(Active.Columns) do
-		local Rows = Column.Rows
-		Column.Rows = Column.PendingRows
-		Column.PendingRows = nil
+	for i, column in ipairs(active.columns) do
+		local rows = column.rows
+		column.rows = column.pending_rows
+		column.pending_rows = nil
 
-		if Rows ~= nil and Column.Rows ~= nil and #Rows == #Column.Rows then
-			for I, V in ipairs(Rows) do
-				Column.Rows[I].MaxH = Rows[I].RequestH
+		if rows ~= nil and column.rows ~= nil and #rows == #column.rows then
+			for i, v in ipairs(rows) do
+				column.rows[i].max_h = rows[i].request_h
 			end
 		end
 	end
 
-	remove(Stack, 1)
-	Active = nil
+	remove(stack, 1)
+	active = nil
 
-	if #Stack > 0 then
-		Active = Stack[1]
+	if #stack > 0 then
+		active = stack[1]
 	end
 end
 
-function LayoutManager.SameLine(CursorOptions)
-	Cursor.SameLine(CursorOptions)
-	if Active ~= nil then
-		local Column = Active.Columns[Active.ColumnNo]
-		Column.RowNo = max(Column.RowNo - 1, 1)
+function LayoutManager.same_line(cursor_options)
+	Cursor.same_line(cursor_options)
+	if active ~= nil then
+		local column = active.columns[active.column_no]
+		column.row_no = max(column.row_no - 1, 1)
 	end
 end
 
-function LayoutManager.NewLine()
-	if Active ~= nil then
-		AddControl(Active, 0, Cursor.GetNewLineSize(), 'NewLine')
+function LayoutManager.new_line()
+	if active ~= nil then
+		add_control(active, 0, Cursor.get_new_line_size(), "new_line")
 	end
-	Cursor.NewLine()
+	Cursor.new_line()
 end
 
-function LayoutManager.SetColumn(Index)
-	if Active ~= nil then
-		Index = max(Index, 1)
-		Index = min(Index, #Active.Columns)
-		Active.ColumnNo = Index
+function LayoutManager.set_column(index)
+	if active ~= nil then
+		index = max(index, 1)
+		index = min(index, #active.columns)
+		active.column_no = index
 	end
 end
 
-function LayoutManager.GetActiveSize()
-	if Active ~= nil then
-		return GetColumnSize(Active)
+function LayoutManager.get_active_size()
+	if active ~= nil then
+		return get_column_size(active)
 	end
 
 	return 0, 0
 end
 
-function LayoutManager.Validate()
-	local Message = nil
+function LayoutManager.validate()
+	local message = nil
 
-	for I, V in ipairs(Stack) do
-		if Message == nil then
-			Message = "The following layouts have not had EndLayout called:\n"
+	for i, v in ipairs(stack) do
+		if message == nil then
+			message = "The following layouts have not had end_layout called:\n"
 		end
 
-		Message = Message .. "'" .. V.Id .. "' in window '" .. V.WindowId .. "'\n"
+		message = message .. "'" .. v.id .. "' in window '" .. v.window_id .. "'\n"
 	end
 
-	assert(Message == nil, Message)
+	assert(message == nil, message)
 end
 
 return LayoutManager

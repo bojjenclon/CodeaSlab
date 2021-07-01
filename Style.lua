@@ -16,18 +16,17 @@ copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+FITNESS FOR a PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --]]
-
-local Config = require(SLAB_PATH .. '.Internal.Core.Config')
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local FileSystem = require(SLAB_PATH .. '.Internal.Core.FileSystem')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
+local Config = required("Config")
+local Cursor = required("Cursor")
+local FileSystem = required("FileSystem")
+local Utility = required("Utility")
 
 local API = {}
 local Styles = {}
@@ -36,9 +35,8 @@ local DefaultStyles = {}
 local CurrentStyle = ""
 local FontStack = {}
 
-local Style = 
-{
-	Font = nil,
+local Style = {
+	font = nil,
 	FontSize = 14,
 	MenuColor = {0.2, 0.2, 0.2, 1.0},
 	ScrollBarColor = {0.4, 0.4, 0.4, 1.0},
@@ -54,7 +52,7 @@ local Style =
 	ButtonPressedColor = {0.8, 0.8, 0.8, 1.0},
 	ButtonDisabledTextColor = {0.35, 0.35, 0.35, 1.0},
 	CheckBoxSelectedColor = {0.0, 0.0, 0.0, 1.0},
-	TextColor = {0.875, 0.875, 0.875, 1.0},
+	text_color = {0.875, 0.875, 0.875, 1.0},
 	TextDisabledColor = {0.45, 0.45, 0.45, 1.0},
 	TextHoverBgColor = {0.5, 0.5, 0.5, 1.0},
 	TextURLColor = {0.2, 0.2, 1.0, 1.0},
@@ -63,42 +61,40 @@ local Style =
 	ComboBoxDropDownColor = {0.4, 0.4, 0.4, 1.0},
 	ComboBoxDropDownHoveredColor = {0.55, 0.55, 0.55, 1.0},
 	ComboBoxArrowColor = {1.0, 1.0, 1.0, 1.0},
-	InputBgColor = {0.4, 0.4, 0.4, 1.0},
+	input_bg_color = {0.4, 0.4, 0.4, 1.0},
 	InputEditBgColor = {0.6, 0.6, 0.6, 1.0},
 	InputSelectColor = {0.14, 0.29, 0.53, 0.4},
 	InputSliderColor = {0.1, 0.1, 0.1, 1.0},
 	MultilineTextColor = {0.0, 0.0, 0.0, 1.0},
-
 	WindowRounding = 2.0,
-	ButtonRounding = 2.0,
+	button_rounding = 2.0,
 	CheckBoxRounding = 2.0,
 	ComboBoxRounding = 2.0,
 	InputBgRounding = 2.0,
 	ScrollBarRounding = 2.0,
-	Indent = 14.0,
-
+	indent = 14.0,
 	API = API
 }
 
-function API.Initialize()
+function API.initialize()
 	local StylePath = "/Internal/Resources/Styles/"
-	local Path = SLAB_FILE_PATH .. StylePath
+	local path = SLAB_FILE_PATH .. StylePath
 	-- Use love's filesystem functions to support both packaged and unpackaged builds
-	local Items = love.filesystem.getDirectoryItems(Path)
+	local items = love.filesystem.getDirectoryItems(path)
 
 	local StyleName = nil
-	for I, V in ipairs(Items) do
-		if string.find(V, Path, 1, true) == nil then
-			V = Path .. V
+	for i, v in ipairs(items) do
+		if string.find(v, path, 1, true) == nil then
+			v = path .. v
 		end
 
-		local LoadedStyle = API.LoadStyle(V, false, true)
+		local LoadedStyle = API.LoadStyle(v, false, true)
 
 		if LoadedStyle ~= nil then
-			local Name = FileSystem.GetBaseName(V, true)
+			local name = FileSystem.get_base_name(v, true)
 
 			if StyleName == nil then
-				StyleName = Name
+				StyleName = name
 			end
 		end
 	end
@@ -108,110 +104,110 @@ function API.Initialize()
 	end
 
 	Style.Font = love.graphics.newFont(Style.FontSize)
-	API.PushFont(Style.Font)
-	Cursor.SetNewLineSize(Style.Font:getHeight())
+	API.push_font(Style.Font)
+	Cursor.set_new_line_size(Style.Font:getHeight())
 end
 
-function API.LoadStyle(Path, Set, IsDefault)
-	local Contents, Error = Config.LoadFile(Path, IsDefault)
+function API.LoadStyle(path, set, IsDefault)
+	local Contents, err = Config.load_file(path, IsDefault)
 	if Contents ~= nil then
-		local Name = FileSystem.GetBaseName(Path, true)
-		Styles[Name] = Contents
-		StylePaths[Name] = Path
+		local name = FileSystem.get_base_name(path, true)
+		Styles[name] = Contents
+		StylePaths[name] = path
 		if IsDefault then
-			table.insert(DefaultStyles, Name)
+			table.insert(DefaultStyles, name)
 		end
 
-		if Set then
-			API.SetStyle(Name)
+		if set then
+			API.SetStyle(name)
 		end
 	else
-		print("Failed to load style '" .. Path .. "'.\n" .. Error)
+		print("Failed to load style '" .. path .. "'.\n" .. err)
 	end
 	return Contents
 end
 
-function API.SetStyle(Name)
-	if Name == nil then
+function API.SetStyle(name)
+	if name == nil then
 		return false
 	end
 
-	local Other = Styles[Name]
-	if Other ~= nil then
-		CurrentStyle = Name
-		for K, V in pairs(Style) do
-			local New = Other[K]
+	local other = Styles[name]
+	if other ~= nil then
+		CurrentStyle = name
+		for k, v in pairs(Style) do
+			local New = other[k]
 			if New ~= nil then
-				if type(V) == "table" then
-					Utility.CopyValues(Style[K], New)
+				if type(v) == "table" then
+					Utility.copy_values(Style[k], New)
 				else
-					Style[K] = New
+					Style[k] = New
 				end
 			end
 		end
 
 		return true
 	else
-		print("Style '" .. Name .. "' is not loaded.")
+		print("Style '" .. name .. "' is not loaded.")
 	end
 
 	return false
 end
 
 function API.GetStyleNames()
-	local Result = {}
+	local result = {}
 
-	for K, V in pairs(Styles) do
-		table.insert(Result, K)
+	for k, v in pairs(Styles) do
+		table.insert(result, k)
 	end
 
-	return Result
+	return result
 end
 
 function API.GetCurrentStyleName()
 	return CurrentStyle
 end
 
-function API.CopyCurrentStyle(Path)
-	local NewStyle = Utility.Copy(Styles[CurrentStyle])
-	local Result, Error = Config.Save(Path, NewStyle)
+function API.CopyCurrentStyle(path)
+	local NewStyle = Utility.copy(Styles[CurrentStyle])
+	local result, err = Config.save(path, NewStyle)
 
-	if Result then
-		local NewStyleName = FileSystem.GetBaseName(Path, true)
+	if result then
+		local NewStyleName = FileSystem.get_base_name(path, true)
 		Styles[NewStyleName] = NewStyle
-		StylePaths[NewStyleName] = Path
+		StylePaths[NewStyleName] = path
 		API.SetStyle(NewStyleName)
 	else
-		print("Failed to create new style at path '" .. Path "'. " .. Error)
+		print("Failed to create new style at path '" .. path "'. " .. err)
 	end
 end
 
 function API.SaveCurrentStyle()
 	API.StoreCurrentStyle()
-	local Path = StylePaths[CurrentStyle]
-	local Settings = Styles[CurrentStyle]
-	local Result, Error = Config.Save(Path, Settings)
-	if not Result then
-		print("Failed to save style '" .. CurrentStyle .. "'. " .. Error)
+	local path = StylePaths[CurrentStyle]
+	local settings = Styles[CurrentStyle]
+	local result, err = Config.save(path, settings)
+	if not result then
+		print("Failed to save style '" .. CurrentStyle .. "'. " .. err)
 	end
 end
 
 function API.StoreCurrentStyle()
-	Utility.CopyValues(Styles[CurrentStyle], Style)
+	Utility.copy_values(Styles[CurrentStyle], Style)
 end
 
-function API.IsDefaultStyle(Name)
-	return Utility.Contains(DefaultStyles, Name)
+function API.IsDefaultStyle(name)
+	return Utility.contains(DefaultStyles, name)
 end
 
-function API.PushFont(Font)
-	if Font ~= nil then
-		Style.Font = Font
-		table.insert(FontStack, 1, Font)
+function API.push_font(font)
+	if font ~= nil then
+		Style.Font = font
+		table.insert(FontStack, 1, font)
 	end
 end
 
-function API.PopFont()
+function API.pop_font()
 	if #FontStack > 1 then
 		table.remove(FontStack, 1)
 		Style.Font = FontStack[1]

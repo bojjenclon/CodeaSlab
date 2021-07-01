@@ -1,344 +1,321 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 local remove = table.remove
 local max = math.max
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local MenuState = require(SLAB_PATH .. '.Internal.UI.MenuState')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local MenuState = required("MenuState")
+local Mouse = required("Mouse")
+local Style = required("Style")
+local text = required("text")
+local Window = required("Window")
 
 local Menu = {}
-local Instances = {}
 
-local Pad = 8.0
-local LeftPad = 25.0
-local RightPad = 70.0
-local CheckSize = 5.0
-local OpenedContextMenu = nil
+local instances = {}
 
-local function IsItemHovered()
-	local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-	local MouseX, MouseY = Window.GetMousePosition()
-	return not Window.IsObstructedAtMouse()
-		and ItemX < MouseX and MouseX < ItemX + Window.GetWidth()
-		and ItemY < MouseY and MouseY < ItemY + ItemH
+local pad = 8.0
+local left_pad = 25.0
+local right_pad = 70.0
+local check_size = 5.0
+local opened_context_menu = nil
+
+local function is_item_hovered()
+	local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+	local mouse_x, mouse_y = Window.get_mouse_position()
+	return not Window.is_obstructed_at_mouse() and item_x < mouse_x and mouse_x < item_x + Window.get_width() and
+		item_y < mouse_y and
+		mouse_y < item_y + item_h
 end
 
-local function AlterOptions(Options)
-	Options = Options == nil and {} or Options
-	Options.Enabled = Options.Enabled == nil and true or Options.Enabled
-	Options.IsSelectable = Options.Enabled
-	Options.SelectOnHover = Options.Enabled
+local function alter_options(options)
+	options = options == nil and {} or options
+	options.enabled = options.enabled == nil and true or options.enabled
+	options.is_selectable = options.enabled
+	options.select_on_hover = options.enabled
 
-	if Options.Enabled then
-		Options.Color = Style.TextColor
+	if options.enabled then
+		options.colour = Style.text_color
 	else
-		Options.Color = Style.TextDisabledColor
+		options.colour = Style.TextDisabledColor
 	end
 
-	return Options
+	return options
 end
 
-local function ConstrainPosition(X, Y, W, H)
-	local ResultX, ResultY = X, Y
+local function constrain_position(x, y, w, h)
+	local result_x, result_y = x, y
 
-	local Right = X + W
-	local Bottom = Y + H
-	local OffsetX = Right >= love.graphics.getWidth()
-	local OffsetY = Bottom >= love.graphics.getHeight()
+	local right = x + w
+	local bottom = y + h
+	local offset_x = right >= WIDTH
+	local offset_y = bottom >= HEIGHT
 
-	if OffsetX then
-		ResultX = X - (Right - love.graphics.getWidth())
+	if offset_x then
+		result_x = x - (right - WIDTH)
 	end
 
-	if OffsetY then
-		ResultY = Y - H
+	if offset_y then
+		result_y = y - h
 	end
 
-	local WinX, WinY, WinW, WinH = Window.GetBounds()
-	if OffsetX then
-		ResultX = WinX - W
+	local win_x, win_y, win_w, win_h = Window.get_bounds()
+	if offset_x then
+		result_x = win_x - w
 	end
 
-	ResultX = max(ResultX, 0.0)
-	ResultY = max(ResultY, 0.0)
+	result_x = max(result_x, 0.0)
+	result_y = max(result_y, 0.0)
 
-	return ResultX, ResultY
+	return result_x, result_y
 end
 
-local function BeginWindow(Id, X, Y)
-	local Instance = Instances[Id]
-	if Instance ~= nil then
-		X, Y = ConstrainPosition(X, Y, Instance.W, Instance.H)
+local function begin_window(id, x, y)
+	local instance = instances[id]
+	if instance ~= nil then
+		x, y = constrain_position(x, y, instance.w, instance.h)
 	end
 
-	Cursor.PushContext()
-	Window.Begin(Id,
-	{
-		X = X,
-		Y = Y,
-		W = 0.0,
-		H = 0.0,
-		AllowResize = false,
-		AllowFocus = false,
-		Border = 0.0,
-		AutoSizeWindow = true,
-		Layer = 'ContextMenu',
-		BgColor = Style.MenuColor,
-		Rounding = {0, 0, 2, 2},
-		NoSavedSettings = true
-	})
+	Cursor.push_context()
+	Window.begin(
+		id,
+		{
+			x = x,
+			y = y,
+			w = 0.0,
+			h = 0.0,
+			allow_resize = false,
+			allow_focus = false,
+			border = 0.0,
+			auto_size_window = true,
+			layer = "ContextMenu",
+			bg_color = Style.MenuColor,
+			rounding = {0, 0, 2, 2},
+			no_saved_settings = true
+		}
+	)
 end
 
-function Menu.BeginMenu(Label, Options)
-	local Result = false
-	local X, Y = Cursor.GetPosition()
-	local IsMenuBar = Window.IsMenuBar()
-	local Id = Window.GetId() .. "." .. Label
-	local Win = Window.Top()
+function Menu.begin_menu(label, options)
+	local result = false
+	local x, y = Cursor.get_position()
+	local is_menu_bar = Window.is_menu_bar()
+	local id = Window.get_id() .. "." .. label
+	local win = Window.top()
 
-	Options = AlterOptions(Options)
-	Options.IsSelected = Options.Enabled and Win.Selected == Id
+	options = alter_options(options)
+	options.is_selected = options.enabled and win.selected == id
 
-	if IsMenuBar then
-		Options.IsSelectableTextOnly = Options.Enabled
-		Options.Pad = Pad * 2
+	if is_menu_bar then
+		options.is_selectable_text_only = options.enabled
+		options.pad = pad * 2
 	else
-		Cursor.SetX(X + LeftPad)
+		Cursor.set_x(x + left_pad)
 	end
 
-	local MenuX = 0.0
-	local MenuY = 0.0
+	local menu_x = 0.0
+	local menu_y = 0.0
 
-	-- 'Result' may be false if 'Enabled' is false. The hovered state is still required
+	-- 'result' may be false if 'enabled' is false. The hovered state is still required
 	-- so that will be handled differently.
-	Result = Text.Begin(Label, Options)
-	local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-	if IsMenuBar then
-		Cursor.SameLine()
+	result = Text.begin(label, options)
+	local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+	if is_menu_bar then
+		Cursor.same_line()
 
 		-- Menubar items don't extend to the width of the window since these items are layed out horizontally. Only
 		-- need to perform hover check on item bounds.
-		local Hovered = Cursor.IsInItemBounds(Window.GetMousePosition())
-		if Hovered then
-			if Mouse.IsClicked(1) then
-				if Result then
-					MenuState.WasOpened = MenuState.IsOpened
-					MenuState.IsOpened = not MenuState.IsOpened
+		local hovered = Cursor.is_in_item_bounds(Window.get_mouse_position())
+		if hovered then
+			if Mouse.is_clicked(1) then
+				if result then
+					MenuState.was_opened = MenuState.is_opened
+					MenuState.is_opened = not MenuState.is_opened
 
-					if MenuState.IsOpened then
-						MenuState.RequestClose = false
+					if MenuState.is_opened then
+						MenuState.request_close = false
 					end
-				elseif MenuState.WasOpened then
-					MenuState.RequestClose = false
+				elseif MenuState.was_opened then
+					MenuState.request_close = false
 				end
 			end
 		end
 
-		if MenuState.IsOpened and OpenedContextMenu == nil then
-			if Result then
-				Win.Selected = Id
+		if MenuState.is_opened and opened_context_menu == nil then
+			if result then
+				win.selected = id
 			end
 		else
-			Win.Selected = nil
+			win.selected = nil
 		end
 
-		MenuX = X
-		MenuY = Y + Window.GetHeight()
+		menu_x = x
+		menu_y = y + Window.get_height()
 	else
-		local WinX, WinY, WinW, WinH = Window.GetBounds()
-		local H = Style.Font:getHeight()
-		local TriX = WinX + WinW - H * 0.75
-		local TriY = Y + H * 0.5
-		local Radius = H * 0.35
-		DrawCommands.Triangle('fill', TriX, TriY, Radius, 90, Style.TextColor)
+		local win_x, win_y, win_w, win_h = Window.get_bounds()
+		local h = Style.Font:getHeight()
+		local tri_x = win_x + win_w - h * 0.75
+		local tri_y = y + h * 0.5
+		local radius = h * 0.35
+		DrawCommands.triangle("fill", tri_x, tri_y, radius, 90, Style.text_color)
 
-		MenuX = X + WinW
-		MenuY = Y
+		menu_x = x + win_w
+		menu_y = y
 
-		if Result then
-			Win.Selected = Id
+		if result then
+			win.selected = id
 		end
 
-		Window.AddItem(ItemX, ItemY, ItemW + RightPad, ItemH)
+		Window.add_item(item_x, item_y, item_w + right_pad, item_h)
 
 		-- Prevent closing the menu window if this item is clicked.
-		if IsItemHovered() and Mouse.IsClicked(1) then
-			MenuState.RequestClose = false
+		if is_item_hovered() and Mouse.is_clicked(1) then
+			MenuState.request_close = false
 		end
 	end
 
-	Result = Win.Selected == Id
+	result = win.selected == id
 
-	if Result then
-		BeginWindow(Id, MenuX, MenuY)
+	if result then
+		begin_window(id, menu_x, menu_y)
 	end
 
-	return Result
+	return result
 end
 
-function Menu.MenuItem(Label, Options)
-	Options = AlterOptions(Options)
+function Menu.menu_item(label, options)
+	options = alter_options(options)
 
-	Cursor.SetX(Cursor.GetX() + LeftPad)
-	local Result = Text.Begin(Label, Options)
-	local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-	Window.AddItem(ItemX, ItemY, ItemW + RightPad, ItemH)
+	Cursor.set_x(Cursor.get_x() + left_pad)
+	local result = Text.begin(label, options)
+	local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+	Window.add_item(item_x, item_y, item_w + right_pad, item_h)
 
-	if Result then
-		local Win = Window.Top()
-		Win.Selected = nil
+	if result then
+		local win = Window.top()
+		win.selected = nil
 
-		Result = Mouse.IsClicked(1)
-		if Result and MenuState.WasOpened then
-			MenuState.RequestClose = true
+		result = Mouse.is_clicked(1)
+		if result and MenuState.was_opened then
+			MenuState.request_close = true
 		end
 	else
-		if IsItemHovered() and Mouse.IsClicked(1) then
-			MenuState.RequestClose = false
+		if is_item_hovered() and Mouse.is_clicked(1) then
+			MenuState.request_close = false
 		end
 	end
 
-	return Result
+	return result
 end
 
-function Menu.MenuItemChecked(Label, IsChecked, Options)
-	Options = AlterOptions(Options)
-	local X, Y = Cursor.GetPosition()
-	local Result = Menu.MenuItem(Label, Options)
+function Menu.menu_item_checked(label, IsChecked, options)
+	options = alter_options(options)
+	local x, y = Cursor.get_position()
+	local result = Menu.menu_item(label, options)
 
 	if IsChecked then
-		local H = Style.Font:getHeight()
-		DrawCommands.Check(X + LeftPad * 0.5, Y + H * 0.5, CheckSize, Options.Color)
+		local h = Style.Font:getHeight()
+		DrawCommands.check(x + left_pad * 0.5, y + h * 0.5, check_size, options.colour)
 	end
 
-	return Result
+	return result
 end
 
-function Menu.Separator()
-	local Ctx = Context.Top()
-	if Ctx.Type == 'Menu' then
-		local Item = GetItem("Sep_" .. Ctx.Data.SeparatorId)
-		Item.IsSeparator = true
-		Ctx.Data.SeparatorId = Ctx.Data.SeparatorId + 1
+function Menu.separator()
+	local ctx = Context.top()
+	if ctx.t == "Menu" then
+		local item = get_item("Sep_" .. ctx.data.separator_id)
+		item.is_separator = true
+		ctx.data.separator_id = ctx.data.separator_id + 1
 	end
 end
 
-function Menu.EndMenu()
-	local Id = Window.GetId()
-	if Instances[Id] == nil then
-		Instances[Id] = {}
+function Menu.end_menu()
+	local id = Window.get_id()
+	if instances[id] == nil then
+		instances[id] = {}
 	end
-	Instances[Id].W = Window.GetWidth()
-	Instances[Id].H = Window.GetHeight()
+	instances[id].w = Window.get_width()
+	instances[id].h = Window.get_height()
 
-	Window.End()
-	Cursor.PopContext()
+	Window.finish()
+	Cursor.pop_context()
 end
 
-function Menu.Pad()
-	return Pad
+function Menu.pad()
+	return pad
 end
 
-function Menu.BeginContextMenu(Options)
-	Options = Options == nil and {} or Options
-	Options.IsItem = Options.IsItem == nil and false or Options.IsItem
-	Options.IsWindow = Options.IsWindow == nil and false or Options.IsWindow
-	Options.Button = Options.Button == nil and 2 or Options.Button
+function Menu.begin_context_menu(options)
+	options = options == nil and {} or options
+	options.is_item = options.is_item == nil and false or options.is_item
+	options.is_window = options.is_window == nil and false or options.is_window
+	options.button = options.button == nil and 2 or options.button
 
 	local BaseId = nil
-	local Id = nil
-	if Options.IsWindow then
-		BaseId = Window.GetId()
-	elseif Options.IsItem then
-		BaseId = Window.GetContextHotItem()
+	local id = nil
+	if options.is_window then
+		BaseId = Window.get_id()
+	elseif options.is_item then
+		BaseId = Window.get_context_hot_item()
 		if BaseId == nil then
-			BaseId = Window.GetHotItem()
+			BaseId = Window.get_hot_item()
 		end
 	end
 
-	if Options.IsItem and Window.GetLastItem() ~= BaseId then
+	if options.is_item and Window.get_last_item() ~= BaseId then
 		return false
 	end
 
 	if BaseId ~= nil then
-		Id = BaseId .. '.ContextMenu'
+		id = BaseId .. ".ContextMenu"
 	end
 
-	if Id == nil then
+	if id == nil then
 		return false
 	end
 
-	if MenuState.IsOpened and OpenedContextMenu ~= nil then
-		if OpenedContextMenu.Id == Id then
-			BeginWindow(OpenedContextMenu.Id, OpenedContextMenu.X, OpenedContextMenu.Y)
+	if MenuState.is_opened and opened_context_menu ~= nil then
+		if opened_context_menu.id == id then
+			begin_window(opened_context_menu.id, opened_context_menu.x, opened_context_menu.y)
 			return true
 		end
 		return false
 	end
 
-	local IsOpening = false
-	if not Window.IsObstructedAtMouse() and Window.IsMouseHovered() and Mouse.IsClicked(Options.Button) then
-		local IsValidWindow = Options.IsWindow and Window.GetHotItem() == nil
-		local IsValidItem = Options.IsItem
+	local is_opening = false
+	if not Window.is_obstructed_at_mouse() and Window.is_mouse_hovered() and Mouse.is_clicked(options.button) then
+		local is_valid_window = options.is_window and Window.get_hot_item() == nil
+		local is_valid_item = options.is_item
 
-		if IsValidWindow or IsValidItem then
-			MenuState.IsOpened = true
-			IsOpening = true
+		if is_valid_window or is_valid_item then
+			MenuState.is_opened = true
+			is_opening = true
 		end
 	end
 
-	if IsOpening then
-		local X, Y = Mouse.Position()
-		X, Y = ConstrainPosition(X, Y, 0.0, 0.0)
-		OpenedContextMenu = {Id = Id, X = X, Y = Y, Win = Window.Top()}
-		Window.SetContextHotItem(Options.IsItem and BaseId or nil)
+	if is_opening then
+		local x, y = Mouse.position()
+		x, y = constrain_position(x, y, 0.0, 0.0)
+		opened_context_menu = {id = id, x = x, y = y, win = Window.top()}
+		Window.set_context_hot_item(options.is_item and BaseId or nil)
 	end
 
 	return false
 end
 
-function Menu.EndContextMenu()
-	Menu.EndMenu()
+function Menu.end_context_menu()
+	Menu.end_menu()
 end
 
-function Menu.Close()
-	MenuState.WasOpened = MenuState.IsOpened
-	MenuState.IsOpened = false
-	MenuState.RequestClose = false
+function Menu.close()
+	MenuState.was_opened = MenuState.is_opened
+	MenuState.is_opened = false
+	MenuState.request_close = false
 
-	if OpenedContextMenu ~= nil then
-		OpenedContextMenu.Win.ContextHotItem = nil
-		OpenedContextMenu = nil
+	if opened_context_menu ~= nil then
+		opened_context_menu.win.context_hot_item = nil
+		opened_context_menu = nil
 	end
 end
 

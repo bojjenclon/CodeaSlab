@@ -1,230 +1,206 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local floor = math.floor
 local insert = table.insert
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Style = require(SLAB_PATH .. '.Style')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Stats = required("Stats")
+local Style = required("Style")
+local Window = required("Window")
 
 local Text = {}
 
-function Text.Begin(Label, Options)
-	local StatHandle = Stats.Begin('Text', 'Slab')
+function Text.begin(label, options)
+	local stat_handle = Stats.begin("Text", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and Style.TextColor or Options.Color
-	Options.Pad = Options.Pad == nil and 0.0 or Options.Pad
-	Options.IsSelectable = Options.IsSelectable == nil and false or Options.IsSelectable
-	Options.IsSelectableTextOnly = Options.IsSelectableTextOnly == nil and false or Options.IsSelectableTextOnly
-	Options.IsSelected = Options.IsSelected == nil and false or Options.IsSelected
-	Options.AddItem = Options.AddItem == nil and true or Options.AddItem
-	Options.HoverColor = Options.HoverColor == nil and Style.TextHoverBgColor or Options.HoverColor
-	Options.URL = Options.URL == nil and nil or Options.URL
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and Style.text_color or options.colour
+	options.pad = options.pad == nil and 0.0 or options.pad
+	options.is_selectable = options.is_selectable == nil and false or options.is_selectable
+	options.is_selectable_text_only = options.is_selectable_text_only == nil and false or options.is_selectable_text_only
+	options.is_selected = options.is_selected == nil and false or options.is_selected
+	options.add_item = options.add_item == nil and true or options.add_item
+	options.hover_color = options.hover_color == nil and Style.TextHoverBgColor or options.hover_color
+	options.url = options.url == nil and nil or options.url
 
-	if Options.URL ~= nil then
-		Options.IsSelectableTextOnly = true
-		Options.Color = Style.TextURLColor
+	if options.url ~= nil then
+		options.is_selectable_text_only = true
+		options.colour = Style.TextURLColor
 	end
 
-	local W = Text.GetWidth(Label)
-	local H = Style.Font:getHeight()
-	local PadX = Options.Pad
+	local w = Text.get_width(label)
+	local h = Style.Font:getHeight()
+	local pad_x = options.pad
 
-	LayoutManager.AddControl(W + PadX, H)
+	LayoutManager.add_control(w + pad_x, h)
 
-	local Color = Options.Color
-	local Result = false
-	local WinId = Window.GetItemId(Label)
-	local X, Y = Cursor.GetPosition()
-	local MouseX, MouseY = Window.GetMousePosition()
+	local colour = options.colour
+	local result = false
+	local win_id = Window.get_item_id(label)
+	local x, y = Cursor.get_position()
+	local mouse_x, mouse_y = Window.get_mouse_position()
 
-	local IsObstructed = Window.IsObstructedAtMouse()
+	local is_obstructed = Window.is_obstructed_at_mouse()
 
-	if not IsObstructed and X <= MouseX and MouseX <= X + W and Y <= MouseY and MouseY <= Y + H then
-		Window.SetHotItem(WinId)
+	if not is_obstructed and x <= mouse_x and mouse_x <= x + w and y <= mouse_y and mouse_y <= y + h then
+		Window.set_hot_item(win_id)
 	end
 
-	local WinX, WinY, WinW, WinH = Window.GetBounds()
-	local CheckX = Options.IsSelectableTextOnly and X or WinX
-	local CheckW = Options.IsSelectableTextOnly and W or WinW
-	local Hovered = not IsObstructed and CheckX <= MouseX and MouseX <= CheckX + CheckW + PadX and Y <= MouseY and MouseY <= Y + H
+	local win_x, win_y, win_w, win_h = Window.get_bounds()
+	local check_x = options.is_selectable_text_only and x or win_x
+	local check_w = options.is_selectable_text_only and w or win_w
+	local hovered =
+		not is_obstructed and check_x <= mouse_x and mouse_x <= check_x + check_w + pad_x and y <= mouse_y and
+		mouse_y <= y + h
 
-	if Options.IsSelectable or Options.IsSelected then
-		if Hovered or Options.IsSelected then
-			DrawCommands.Rectangle('fill', CheckX, Y, CheckW + PadX, H, Options.HoverColor)
+	if options.is_selectable or options.is_selected then
+		if hovered or options.is_selected then
+			DrawCommands.rectangle("fill", check_x, y, check_w + pad_x, h, options.hover_color)
 		end
 
-		if Hovered then
-			if Options.SelectOnHover then
-				Result = true
+		if hovered then
+			if options.select_on_hover then
+				result = true
 			else
-				if Mouse.IsClicked(1) then
-					Result = true
+				if Mouse.is_clicked(1) then
+					result = true
 				end
 			end
 		end
 	end
 
-	if Hovered and Options.URL ~= nil then
-		Mouse.SetCursor('hand')
+	if hovered and options.url ~= nil then
+		Mouse.set_cursor("hand")
 
-		if Mouse.IsClicked(1) then
-			love.system.openURL(Options.URL)
+		if Mouse.is_clicked(1) then
+			love.system.openURL(options.url)
 		end
 	end
 
-	DrawCommands.Print(Label, floor(X + PadX * 0.5), floor(Y), Color, Style.Font)
+	DrawCommands.print(label, floor(x + pad_x * 0.5), floor(y), colour, Style.Font)
 
-	if Options.URL ~= nil then
-		DrawCommands.Line(X + PadX, Y + H, X + W, Y + H, 1.0, Color)
+	if options.url ~= nil then
+		DrawCommands.line(x + pad_x, y + h, x + w, y + h, 1.0, colour)
 	end
 
-	Cursor.SetItemBounds(X, Y, W + PadX, H)
-	Cursor.AdvanceY(H)
+	Cursor.set_item_bounds(x, y, w + pad_x, h)
+	Cursor.advance_y(h)
 
-	if Options.AddItem then
-		Window.AddItem(X, Y, W + PadX, H, WinId)
+	if options.add_item then
+		Window.add_item(x, y, w + pad_x, h, win_id)
 	end
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 
-	return Result
+	return result
 end
 
-function Text.BeginFormatted(Label, Options)
-	local StatHandle = Stats.Begin('Textf', 'Slab')
+function Text.begin_formatted(label, options)
+	local stat_handle = Stats.begin("textf", "Slab")
 
-	local WinW, WinH = Window.GetBorderlessSize()
+	local win_w, win_h = Window.get_borderless_size()
 
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and Style.TextColor or Options.Color
-	Options.W = Options.W == nil and WinW or Options.W
-	Options.Align = Options.Align == nil and 'left' or Options.Align
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and Style.text_color or options.colour
+	options.w = options.w == nil and win_w or options.w
+	options.align = options.align == nil and "left" or options.align
 
-	if Window.IsAutoSize() then
-		Options.W = love.graphics.getWidth()
+	if Window.is_auto_size() then
+		options.w = WIDTH
 	end
 
-	local Width, Wrapped = Style.Font:getWrap(Label, Options.W)
-	local H = #Wrapped * Style.Font:getHeight()
+	local width, wrapped = Style.Font:getWrap(label, options.w)
+	local h = #wrapped * Style.Font:getHeight()
 
-	LayoutManager.AddControl(Width, H)
+	LayoutManager.add_control(width, h)
 
-	local X, Y = Cursor.GetPosition()
+	local x, y = Cursor.get_position()
 
-	DrawCommands.Printf(Label, floor(X), floor(Y), Width, Options.Align, Options.Color, Style.Font)
+	DrawCommands.printf(label, floor(x), floor(y), width, options.align, options.colour, Style.Font)
 
-	Cursor.SetItemBounds(floor(X), floor(Y), Width, H)
-	Cursor.AdvanceY(H)
+	Cursor.set_item_bounds(floor(x), floor(y), width, h)
+	Cursor.advance_y(h)
 
-	Window.ResetContentSize()
-	Window.AddItem(floor(X), floor(Y), Width, H)
+	Window.reset_content_size()
+	Window.add_item(floor(x), floor(y), width, h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Text.BeginObject(Object, Options)
-	local StatHandle = Stats.Begin('TextObject', 'Slab')
+function Text.begin_object(object, options)
+	local stat_handle = Stats.begin("TextObject", "Slab")
 
-	local WinW, WinH = Window.GetBorderlessSize()
+	local win_w, win_h = Window.get_borderless_size()
 
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and Style.TextColor or Options.Color
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and Style.text_color or options.colour
 
-	local W, H = Object:getDimensions()
+	local w, h = object:getDimensions()
 
-	LayoutManager.AddControl(W, H)
+	LayoutManager.add_control(w, h)
 
-	local X, Y = Cursor.GetPosition()
+	local x, y = Cursor.get_position()
 
-	DrawCommands.Text(Object, floor(X), floor(Y), Options.Color)
+	DrawCommands.Text(object, floor(x), floor(y), options.colour)
 
-	Cursor.SetItemBounds(floor(X), floor(Y), W, H)
-	Cursor.AdvanceY(Y)
+	Cursor.set_item_bounds(floor(x), floor(y), w, h)
+	Cursor.advance_y(y)
 
-	Window.ResetContentSize()
-	Window.AddItem(floor(X), floor(Y), W, H)
+	Window.reset_content_size()
+	Window.add_item(floor(x), floor(y), w, h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Text.GetWidth(Label)
-	return Style.Font:getWidth(Label)
+function Text.get_width(label)
+	return Style.Font:getWidth(label)
 end
 
-function Text.GetHeight()
+function Text.get_height()
 	return Style.Font:getHeight()
 end
 
-function Text.GetSize(Label)
-	return Style.Font:getWidth(Label), Style.Font:getHeight()
+function Text.get_size(label)
+	return Style.Font:getWidth(label), Style.Font:getHeight()
 end
 
-function Text.GetSizeWrap(Label, Width)
-	local W, Lines = Style.Font:getWrap(Label, Width)
-	return W, #Lines * Text.GetHeight()
+function Text.get_size_wrap(label, width)
+	local w, lines = Style.Font:getWrap(label, width)
+	return w, #lines * Text.get_height()
 end
 
-function Text.GetLines(Label, Width)
-	local W, Lines = Style.Font:getWrap(Label, Width)
+function Text.get_lines(label, width)
+	local w, lines = Style.Font:getWrap(label, width)
 
-	local Start = 0
-	for I, V in ipairs(Lines) do
-		if #V == 0 then
-			Lines[I] = "\n"
+	local start = 0
+	for i, v in ipairs(lines) do
+		if #v == 0 then
+			lines[i] = "\n"
 		else
-			local Offset = Start + #V + 1
-			local Ch = string.sub(Label, Offset, Offset)
+			local offset = start + #v + 1
+			local ch = string.sub(label, offset, offset)
 
-			if Ch == '\n' then
-				Lines[I] = Lines[I] .. "\n"
+			if ch == "\n" then
+				lines[i] = lines[i] .. "\n"
 			end
 		end
 
-		Start = Start + #Lines[I]
+		start = start + #lines[i]
 	end
 
-	if string.sub(Label, #Label, #Label) == '\n' then
-		insert(Lines, "")
+	if string.sub(label, #label, #label) == "\n" then
+		insert(lines, "")
 	end
 
-	if #Lines == 0 then
-		insert(Lines, "")
+	if #lines == 0 then
+		insert(lines, "")
 	end
 
-	return Lines
+	return lines
 end
 
-function Text.CreateObject()
+function Text.create_object()
 	return love.graphics.newText(Style.Font)
 end
 

@@ -1,69 +1,43 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local ceil = math.ceil
 local max = math.max
 local min = math.min
 local insert = table.insert
 
-local Button = require(SLAB_PATH .. '.Internal.UI.Button')
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local Image = require(SLAB_PATH .. '.Internal.UI.Image')
-local Input = require(SLAB_PATH .. '.Internal.UI.Input')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Button = required("button")
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local Image = required("img")
+local Input = required("Input")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Style = required("Style")
+local text = required("text")
+local Utility = required("Utility")
+local Window = required("Window")
 
 local ColorPicker = {}
 
-local SaturationMeshes = nil
-local SaturationSize = 200.0
-local SaturationStep = 5
-local SaturationFocused = false
+local saturation_meshes = nil
+local saturation_size = 200.0
+local saturation_step = 5
+local saturation_focused = false
 
-local TintMeshes = nil
-local TintW = 30.0
-local TintH = SaturationSize
-local TintFocused = false
+local tint_meshes = nil
+local tint_w = 30.0
+local tint_h = saturation_size
+local tint_focused = false
 
-local AlphaMesh = nil
-local AlphaW = TintW
-local AlphaH = TintH
-local AlphaFocused = false
+local alpha_mesh = nil
+local alpha_w = tint_w
+local alpha_h = tint_h
+local alpha_focused = false
 
-local CurrentColor = {1.0, 1.0, 1.0, 1.0}
-local ColorH = 25.0
+local current_color = {1.0, 1.0, 1.0, 1.0}
+local color_h = 25.0
 
-local function IsEqual(A, B)
-	for I, V in ipairs(A) do
-		if V ~= B[I] then
+local function is_equal(a, b)
+	for i, v in ipairs(a) do
+		if v ~= b[i] then
 			return false
 		end
 	end
@@ -71,114 +45,127 @@ local function IsEqual(A, B)
 	return true
 end
 
-local function InputColor(Component, Value, OffsetX)
-	local Changed = false
-	Text.Begin(string.format("%s ", Component))
-	Cursor.SameLine()
-	Cursor.SetRelativeX(OffsetX)
-	if Input.Begin('ColorPicker_' .. Component, {W = 40.0, NumbersOnly = true, Text = tostring(ceil(Value * 255)), ReturnOnText = false}) then
-		local NewValue = tonumber(Input.GetText())
-		if NewValue ~= nil then
-			NewValue = max(NewValue, 0)
-			NewValue = min(NewValue, 255)
-			Value = NewValue / 255
-			Changed = true
+local function input_color(component, value, offset_x)
+	local changed = false
+	Text.begin(string.format("%s ", component))
+	Cursor.same_line()
+	Cursor.set_relative_x(offset_x)
+	if
+		Input.begin(
+			"ColorPicker_" .. component,
+			{w = 40.0, numbers_only = true, text = tostring(ceil(value * 255)), return_on_text = false}
+		)
+	 then
+		local new_value = tonumber(Input.get_text())
+		if new_value ~= nil then
+			new_value = max(new_value, 0)
+			new_value = min(new_value, 255)
+			value = new_value / 255
+			changed = true
 		end
 	end
-	return Value, Changed
+	return value, changed
 end
 
-local function UpdateSaturationColors()
-	if SaturationMeshes ~= nil then
-		local MeshIndex = 1
-		local Step = SaturationStep
-		local C00 = {1.0, 1.0, 1.0, 1.0}
-		local C10 = {1.0, 1.0, 1.0, 1.0}
-		local C01 = {1.0, 1.0, 1.0, 1.0}
-		local C11 = {1.0, 1.0, 1.0, 1.0}
-		local StepX, StepY = 0, 0
-		local Hue, Sat, Val = Utility.RGBtoHSV(CurrentColor[1], CurrentColor[2], CurrentColor[3])
+local function update_saturation_colors()
+	if saturation_meshes ~= nil then
+		local mesh_index = 1
+		local step = saturation_step
+		local c_0_0 = {1.0, 1.0, 1.0, 1.0}
+		local c_1_0 = {1.0, 1.0, 1.0, 1.0}
+		local c_0_1 = {1.0, 1.0, 1.0, 1.0}
+		local c_1_1 = {1.0, 1.0, 1.0, 1.0}
+		local step_x, step_y = 0, 0
+		local hue, sat, val = Utility.rgb_to_hsv(current_color[1], current_color[2], current_color[3])
 
-		for I = 1, Step, 1 do
-			for J = 1, Step, 1 do
-				local S0 = StepX / Step
-				local S1 = (StepX + 1) / Step
-				local V0 = 1.0 - (StepY / Step)
-				local V1 = 1.0 - ((StepY + 1) / Step)
+		for i = 1, step, 1 do
+			for j = 1, step, 1 do
+				local S0 = step_x / step
+				local S1 = (step_x + 1) / step
+				local V0 = 1.0 - (step_y / step)
+				local V1 = 1.0 - ((step_y + 1) / step)
 
-				C00[1], C00[2], C00[3] = Utility.HSVtoRGB(Hue, S0, V0)
-				C10[1], C10[2], C10[3] = Utility.HSVtoRGB(Hue, S1, V0)
-				C01[1], C01[2], C01[3] = Utility.HSVtoRGB(Hue, S0, V1)
-				C11[1], C11[2], C11[3] = Utility.HSVtoRGB(Hue, S1, V1)
+				c_0_0[1], c_0_0[2], c_0_0[3] = Utility.hsv_to_rgb(hue, S0, V0)
+				c_1_0[1], c_1_0[2], c_1_0[3] = Utility.hsv_to_rgb(hue, S1, V0)
+				c_0_1[1], c_0_1[2], c_0_1[3] = Utility.hsv_to_rgb(hue, S0, V1)
+				c_1_1[1], c_1_1[2], c_1_1[3] = Utility.hsv_to_rgb(hue, S1, V1)
 
-				local Mesh = SaturationMeshes[MeshIndex]
-				MeshIndex = MeshIndex + 1
+				local msh = saturation_meshes[mesh_index]
+				mesh_index = mesh_index + 1
 
-				Mesh:setVertexAttribute(1, 3, C00[1], C00[2], C00[3], C00[4])
-				Mesh:setVertexAttribute(2, 3, C10[1], C10[2], C10[3], C10[4])
-				Mesh:setVertexAttribute(3, 3, C11[1], C11[2], C11[3], C11[4])
-				Mesh:setVertexAttribute(4, 3, C01[1], C01[2], C01[3], C01[4])
+				msh:setVertexAttribute(1, 3, c_0_0[1], c_0_0[2], c_0_0[3], c_0_0[4])
+				msh:setVertexAttribute(2, 3, c_1_0[1], c_1_0[2], c_1_0[3], c_1_0[4])
+				msh:setVertexAttribute(3, 3, c_1_1[1], c_1_1[2], c_1_1[3], c_1_1[4])
+				msh:setVertexAttribute(4, 3, c_0_1[1], c_0_1[2], c_0_1[3], c_0_1[4])
 
-				StepX = StepX + 1
+				step_x = step_x + 1
 			end
 
-			StepX = 0
-			StepY = StepY + 1
+			step_x = 0
+			step_y = step_y + 1
 		end
 	end
 end
 
-local function InitializeSaturationMeshes()
-	if SaturationMeshes == nil then
-		SaturationMeshes = {}
-		local Step = SaturationStep
-		local X, Y = 0.0, 0.0
-		local Size = SaturationSize / Step
+local function initialize_saturation_meshes()
+	if saturation_meshes == nil then
+		saturation_meshes = {}
+		local step = saturation_step
+		local x, y = 0.0, 0.0
+		local size = saturation_size / step
 
-		for I = 1, Step, 1 do
-			for J = 1, Step, 1 do
-				local Verts = {
+		for i = 1, step, 1 do
+			for j = 1, step, 1 do
+				local verts = {
 					{
-						X, Y,
-						0.0, 0.0
+						x,
+						y,
+						0.0,
+						0.0
 					},
 					{
-						X + Size, Y,
-						1.0, 0.0
+						x + size,
+						y,
+						1.0,
+						0.0
 					},
 					{
-						X + Size, Y + Size,
-						1.0, 1.0
+						x + size,
+						y + size,
+						1.0,
+						1.0
 					},
 					{
-						X, Y + Size,
-						0.0, 1.0
+						x,
+						y + size,
+						0.0,
+						1.0
 					}
 				}
 
-				local NewMesh = love.graphics.newMesh(Verts)
-				insert(SaturationMeshes, NewMesh)
+				local new_mesh = love.graphics.newMesh(verts)
+				insert(saturation_meshes, new_mesh)
 
-				X = X + Size
+				x = x + size
 			end
 
-			X = 0.0
-			Y = Y + Size
+			x = 0.0
+			y = y + size
 		end
 	end
 
-	UpdateSaturationColors()
+	update_saturation_colors()
 end
 
 local function InitializeTintMeshes()
-	if TintMeshes == nil then
-		TintMeshes = {}
-		local Step = 6
-		local X, Y = 0.0, 0.0
-		local C0 = {1.0, 1.0, 1.0, 1.0}
-		local C1 = {1.0, 1.0, 1.0, 1.0}
-		local I = 0
-		local Colors = {
+	if tint_meshes == nil then
+		tint_meshes = {}
+		local step = 6
+		local x, y = 0.0, 0.0
+		local c_0 = {1.0, 1.0, 1.0, 1.0}
+		local c_1 = {1.0, 1.0, 1.0, 1.0}
+		local i = 0
+		local colors = {
 			{1.0, 0.0, 0.0, 1.0},
 			{1.0, 1.0, 0.0, 1.0},
 			{0.0, 1.0, 0.0, 1.0},
@@ -188,296 +175,342 @@ local function InitializeTintMeshes()
 			{1.0, 0.0, 0.0, 1.0}
 		}
 
-		for Index = 1, Step, 1 do
-			C0 = Colors[Index]
-			C1 = Colors[Index + 1]
-			local Verts = {
+		for index = 1, step, 1 do
+			c_0 = colors[index]
+			c_1 = colors[index + 1]
+			local verts = {
 				{
-					X, Y,
-					0.0, 0.0,
-					C0[1], C0[2], C0[3], C0[4]
+					x,
+					y,
+					0.0,
+					0.0,
+					c_0[1],
+					c_0[2],
+					c_0[3],
+					c_0[4]
 				},
 				{
-					TintW, Y,
-					1.0, 0.0,
-					C0[1], C0[2], C0[3], C0[4]
+					tint_w,
+					y,
+					1.0,
+					0.0,
+					c_0[1],
+					c_0[2],
+					c_0[3],
+					c_0[4]
 				},
 				{
-					TintW, Y + TintH / Step,
-					1.0, 1.0,
-					C1[1], C1[2], C1[3], C1[4]
+					tint_w,
+					y + tint_h / step,
+					1.0,
+					1.0,
+					c_1[1],
+					c_1[2],
+					c_1[3],
+					c_1[4]
 				},
 				{
-					X, Y + TintH / Step,
-					0.0, 1.0,
-					C1[1], C1[2], C1[3], C1[4]
+					x,
+					y + tint_h / step,
+					0.0,
+					1.0,
+					c_1[1],
+					c_1[2],
+					c_1[3],
+					c_1[4]
 				}
 			}
 
-			local NewMesh = love.graphics.newMesh(Verts)
-			insert(TintMeshes, NewMesh)
+			local new_mesh = love.graphics.newMesh(verts)
+			insert(tint_meshes, new_mesh)
 
-			Y = Y + TintH / Step
+			y = y + tint_h / step
 		end
 	end
 end
 
-local function InitializeAlphaMesh()
-	if AlphaMesh == nil then
-		local Verts = {
+local function initialize_alpha_mesh()
+	if alpha_mesh == nil then
+		local verts = {
 			{
-				0.0, 0.0,
-				0.0, 0.0,
-				1.0, 1.0, 1.0, 1.0
+				0.0,
+				0.0,
+				0.0,
+				0.0,
+				1.0,
+				1.0,
+				1.0,
+				1.0
 			},
 			{
-				AlphaW, 0.0,
-				1.0, 0.0,
-				1.0, 1.0, 1.0, 1.0
+				alpha_w,
+				0.0,
+				1.0,
+				0.0,
+				1.0,
+				1.0,
+				1.0,
+				1.0
 			},
 			{
-				AlphaW, AlphaH,
-				1.0, 1.0,
-				0.0, 0.0, 0.0, 1.0
+				alpha_w,
+				alpha_h,
+				1.0,
+				1.0,
+				0.0,
+				0.0,
+				0.0,
+				1.0
 			},
 			{
-				0.0, AlphaH,
-				0.0, 1.0,
-				0.0, 0.0, 0.0, 1.0
+				0.0,
+				alpha_h,
+				0.0,
+				1.0,
+				0.0,
+				0.0,
+				0.0,
+				1.0
 			}
 		}
 
-		AlphaMesh = love.graphics.newMesh(Verts)
+		alpha_mesh = love.graphics.newMesh(verts)
 	end
 end
 
-function ColorPicker.Begin(Options)
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and {1.0, 1.0, 1.0, 1.0} or Options.Color
-	Options.Refresh = Options.Refresh == nil and false or Options.Refresh
-	Options.X = Options.X == nil and nil or Options.X
-	Options.Y = Options.Y == nil and nil or Options.Y
+function ColorPicker.begin(options)
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and {1.0, 1.0, 1.0, 1.0} or options.colour
+	options.refresh = options.refresh == nil and false or options.refresh
+	options.x = options.x == nil and nil or options.x
+	options.y = options.y == nil and nil or options.y
 
-	if SaturationMeshes == nil then
-		InitializeSaturationMeshes()
+	if saturation_meshes == nil then
+		initialize_saturation_meshes()
 	end
 
-	if TintMeshes == nil then
+	if tint_meshes == nil then
 		InitializeTintMeshes()
 	end
 
-	if AlphaMesh == nil then
-		InitializeAlphaMesh()
+	if alpha_mesh == nil then
+		initialize_alpha_mesh()
 	end
 
-	Window.Begin('ColorPicker', {Title = "Color Picker", X = Options.X, Y = Options.Y})
+	Window.begin("ColorPicker", {title = "colour Picker", x = options.x, y = options.y})
 
-	if Window.IsAppearing() or Options.Refresh then
-		CurrentColor[1] = Options.Color[1]
-		CurrentColor[2] = Options.Color[2]
-		CurrentColor[3] = Options.Color[3]
-		CurrentColor[4] = Options.Color[4]
-		UpdateSaturationColors()
+	if Window.is_appearing() or options.refresh then
+		current_color[1] = options.colour[1]
+		current_color[2] = options.colour[2]
+		current_color[3] = options.colour[3]
+		current_color[4] = options.colour[4]
+		update_saturation_colors()
 	end
 
-	local X, Y = Cursor.GetPosition()
-	local MouseX, MouseY = Window.GetMousePosition()
-	local H, S, V = Utility.RGBtoHSV(CurrentColor[1], CurrentColor[2], CurrentColor[3])
-	local UpdateColor = false
-	local MouseClicked = Mouse.IsClicked(1) and not Window.IsObstructedAtMouse()
+	local x, y = Cursor.get_position()
+	local mouse_x, mouse_y = Window.get_mouse_position()
+	local h, s, v = Utility.rgb_to_hsv(current_color[1], current_color[2], current_color[3])
+	local update_color = false
+	local mouse_clicked = Mouse.is_clicked(1) and not Window.is_obstructed_at_mouse()
 
-	if SaturationMeshes ~= nil then
-		for I, V in ipairs(SaturationMeshes) do
-			DrawCommands.Mesh(V, X, Y)
+	if saturation_meshes ~= nil then
+		for i, v in ipairs(saturation_meshes) do
+			DrawCommands.mesh(v, x, y)
 		end
 
-		Window.AddItem(X, Y, SaturationSize, SaturationSize)
+		Window.add_item(x, y, saturation_size, saturation_size)
 
-		local UpdateSaturation = false
-		if X <= MouseX and MouseX < X + SaturationSize and Y <= MouseY and MouseY < Y + SaturationSize then
-			if MouseClicked then
-				SaturationFocused = true
-				UpdateSaturation = true
+		local update_saturation = false
+		if x <= mouse_x and mouse_x < x + saturation_size and y <= mouse_y and mouse_y < y + saturation_size then
+			if mouse_clicked then
+				saturation_focused = true
+				update_saturation = true
 			end
 		end
 
-		if SaturationFocused and Mouse.IsDragging(1) then
-			UpdateSaturation = true
+		if saturation_focused and Mouse.is_dragging(1) then
+			update_saturation = true
 		end
 
-		if UpdateSaturation then
-			local CanvasX = max(MouseX - X, 0)
-			CanvasX = min(CanvasX, SaturationSize)
+		if update_saturation then
+			local canvas_x = max(mouse_x - x, 0)
+			canvas_x = min(canvas_x, saturation_size)
 
-			local CanvasY = max(MouseY - Y, 0)
-			CanvasY = min(CanvasY, SaturationSize)
+			local canvas_y = max(mouse_y - y, 0)
+			canvas_y = min(canvas_y, saturation_size)
 
-			S = CanvasX / SaturationSize
-			V = 1 - (CanvasY / SaturationSize)
+			s = canvas_x / saturation_size
+			v = 1 - (canvas_y / saturation_size)
 
-			UpdateColor = true
+			update_color = true
 		end
 
-		local SaturationX = S * SaturationSize
-		local SaturationY = (1.0 - V) * SaturationSize
-		DrawCommands.Circle('line', X + SaturationX, Y + SaturationY, 4.0, {1.0, 1.0, 1.0, 1.0})
+		local saturation_x = s * saturation_size
+		local saturation_y = (1.0 - v) * saturation_size
+		DrawCommands.circle("line", x + saturation_x, y + saturation_y, 4.0, {1.0, 1.0, 1.0, 1.0})
 
-		X = X + SaturationSize + Cursor.PadX()
+		x = x + saturation_size + Cursor.pad_x()
 	end
 
-	if TintMeshes ~= nil then
-		for I, V in ipairs(TintMeshes) do
-			DrawCommands.Mesh(V, X, Y)
+	if tint_meshes ~= nil then
+		for i, v in ipairs(tint_meshes) do
+			DrawCommands.mesh(v, x, y)
 		end
 
-		Window.AddItem(X, Y, TintW, TintH)
+		Window.add_item(x, y, tint_w, tint_h)
 
-		local UpdateTint = false
-		if X <= MouseX and MouseX < X + TintW and Y <= MouseY and MouseY < Y + TintH then
-			if MouseClicked then
-				TintFocused = true
-				UpdateTint = true
+		local update_tint = false
+		if x <= mouse_x and mouse_x < x + tint_w and y <= mouse_y and mouse_y < y + tint_h then
+			if mouse_clicked then
+				tint_focused = true
+				update_tint = true
 			end
 		end
 
-		if TintFocused and Mouse.IsDragging(1) then
-			UpdateTint = true
+		if tint_focused and Mouse.is_dragging(1) then
+			update_tint = true
 		end
 
-		if UpdateTint then
-			local CanvasY = max(MouseY - Y, 0)
-			CanvasY = min(CanvasY, TintH)
+		if update_tint then
+			local canvas_y = max(mouse_y - y, 0)
+			canvas_y = min(canvas_y, tint_h)
 
-			H = CanvasY / TintH
+			h = canvas_y / tint_h
 
-			UpdateColor = true
+			update_color = true
 		end
 
-		local TintY = H * TintH
-		DrawCommands.Line(X, Y + TintY, X + TintW, Y + TintY, 2.0, {1.0, 1.0, 1.0, 1.0})
+		local tint_y = h * tint_h
+		DrawCommands.line(x, y + tint_y, x + tint_w, y + tint_y, 2.0, {1.0, 1.0, 1.0, 1.0})
 
-		X = X + TintW + Cursor.PadX()
-		DrawCommands.Mesh(AlphaMesh, X, Y)
-		Window.AddItem(X, Y, AlphaW, AlphaH)
+		x = x + tint_w + Cursor.pad_x()
+		DrawCommands.mesh(alpha_mesh, x, y)
+		Window.add_item(x, y, alpha_w, alpha_h)
 
-		local UpdateAlpha = false
-		if X <= MouseX and MouseX < X + AlphaW and Y <= MouseY and MouseY < Y + AlphaH then
-			if MouseClicked then
-				AlphaFocused = true
-				UpdateAlpha = true
+		local update_alpha = false
+		if x <= mouse_x and mouse_x < x + alpha_w and y <= mouse_y and mouse_y < y + alpha_h then
+			if mouse_clicked then
+				alpha_focused = true
+				update_alpha = true
 			end
 		end
 
-		if AlphaFocused and Mouse.IsDragging(1) then
-			UpdateAlpha = true
+		if alpha_focused and Mouse.is_dragging(1) then
+			update_alpha = true
 		end
 
-		if UpdateAlpha then
-			local CanvasY = max(MouseY - Y, 0)
-			CanvasY = min(CanvasY, AlphaH)
+		if update_alpha then
+			local canvas_y = max(mouse_y - y, 0)
+			canvas_y = min(canvas_y, alpha_h)
 
-			CurrentColor[4] = 1.0 - CanvasY / AlphaH
+			current_color[4] = 1.0 - canvas_y / alpha_h
 
-			UpdateColor = true
+			update_color = true
 		end
 
-		local A = 1.0 - CurrentColor[4]
-		local AlphaY = A * AlphaH
-		DrawCommands.Line(X, Y + AlphaY, X + AlphaW, Y + AlphaY, 2.0, {A, A, A, 1.0})
-		
-		Y = Y + AlphaH + Cursor.PadY()
+		local a = 1.0 - current_color[4]
+		local alpha_y = a * alpha_h
+		DrawCommands.line(x, y + alpha_y, x + alpha_w, y + alpha_y, 2.0, {a, a, a, 1.0})
+
+		y = y + alpha_h + Cursor.pad_y()
 	end
 
-	if UpdateColor then
-		CurrentColor[1], CurrentColor[2], CurrentColor[3] = Utility.HSVtoRGB(H, S, V)
-		UpdateSaturationColors()
+	if update_color then
+		current_color[1], current_color[2], current_color[3] = Utility.hsv_to_rgb(h, s, v)
+		update_saturation_colors()
 	end
 
-	local OffsetX = Text.GetWidth("##")
-	Cursor.AdvanceY(SaturationSize)
-	X, Y = Cursor.GetPosition()
-	local R = CurrentColor[1]
-	local G = CurrentColor[2]
-	local B = CurrentColor[3]
-	local A = CurrentColor[4]
+	local offset_x = Text.get_width("##")
+	Cursor.advance_y(saturation_size)
+	x, y = Cursor.get_position()
+	local r = current_color[1]
+	local g = current_color[2]
+	local b = current_color[3]
+	local a = current_color[4]
 
-	CurrentColor[1], R = InputColor("R", R, OffsetX)
-	CurrentColor[2], G = InputColor("G", G, OffsetX)
-	CurrentColor[3], B = InputColor("B", B, OffsetX)
-	CurrentColor[4], A = InputColor("A", A, OffsetX)
+	current_color[1], r = input_color("r", r, offset_x)
+	current_color[2], g = input_color("g", g, offset_x)
+	current_color[3], b = input_color("b", b, offset_x)
+	current_color[4], a = input_color("a", a, offset_x)
 
-	if R or G or B or A then
-		UpdateSaturationColors()
+	if r or g or b or a then
+		update_saturation_colors()
 	end
 
-	local InputX, InputY = Cursor.GetPosition()
-	Cursor.SameLine()
-	X = Cursor.GetX()
-	Cursor.SetY(Y)
+	local input_x, input_y = Cursor.get_position()
+	Cursor.same_line()
+	x = Cursor.get_x()
+	Cursor.set_y(y)
 
-	local WinX, WinY, WinW, WinH = Window.GetBounds()
-	WinW, WinH = Window.GetBorderlessSize()
+	local win_x, win_y, win_w, win_h = Window.get_bounds()
+	win_w, win_h = Window.get_borderless_size()
 
-	OffsetX = Text.GetWidth("####")
-	local ColorX = X + OffsetX
+	offset_x = Text.get_width("####")
+	local color_x = x + offset_x
 
-	local ColorW = (WinX + WinW) - ColorX
-	Cursor.SetPosition(ColorX, Y)
-	Image.Begin('ColorPicker_CurrentAlpha', {
-		Path = SLAB_FILE_PATH .. "/Internal/Resources/Textures/Transparency.png",
-		SubW = ColorW,
-		SubH = ColorH,
-		WrapH = "repeat",
-		WrapV = "repeat"
-	})
-	DrawCommands.Rectangle('fill', ColorX, Y, ColorW, ColorH, CurrentColor, Style.ButtonRounding)
+	local color_w = (win_x + win_w) - color_x
+	Cursor.set_position(color_x, y)
+	Image.begin(
+		"ColorPicker_CurrentAlpha",
+		{
+			path = SLAB_FILE_PATH .. "/Internal/Resources/Textures/Transparency.png",
+			sub_w = color_w,
+			sub_h = color_h,
+			wrap_h = "repeat",
+			wrap_v = "repeat"
+		}
+	)
+	DrawCommands.rectangle("fill", color_x, y, color_w, color_h, current_color, Style.button_rounding)
 
-	local LabelW, LabelH = Text.GetSize("New")
-	Cursor.SetPosition(ColorX - LabelW - Cursor.PadX(), Y + (ColorH * 0.5) - (LabelH * 0.5))
-	Text.Begin("New")
+	local label_w, LabelH = Text.get_size("New")
+	Cursor.set_position(color_x - label_w - Cursor.pad_x(), y + (color_h * 0.5) - (LabelH * 0.5))
+	Text.begin("New")
 
-	Y = Y + ColorH + Cursor.PadY()
+	y = y + color_h + Cursor.pad_y()
 
-	Cursor.SetPosition(ColorX, Y)
-	Image.Begin('ColorPicker_CurrentAlpha', {
-		Path = SLAB_FILE_PATH .. "/Internal/Resources/Textures/Transparency.png",
-		SubW = ColorW,
-		SubH = ColorH,
-		WrapH = "repeat",
-		WrapV = "repeat"
-	})
-	DrawCommands.Rectangle('fill', ColorX, Y, ColorW, ColorH, Options.Color, Style.ButtonRounding)
+	Cursor.set_position(color_x, y)
+	Image.begin(
+		"ColorPicker_CurrentAlpha",
+		{
+			path = SLAB_FILE_PATH .. "/Internal/Resources/Textures/Transparency.png",
+			sub_w = color_w,
+			sub_h = color_h,
+			wrap_h = "repeat",
+			wrap_v = "repeat"
+		}
+	)
+	DrawCommands.rectangle("fill", color_x, y, color_w, color_h, options.colour, Style.button_rounding)
 
-	local LabelW, LabelH = Text.GetSize("Old")
-	Cursor.SetPosition(ColorX - LabelW - Cursor.PadX(), Y + (ColorH * 0.5) - (LabelH * 0.5))
-	Text.Begin("Old")
+	local label_w, LabelH = Text.get_size("Old")
+	Cursor.set_position(color_x - label_w - Cursor.pad_x(), y + (color_h * 0.5) - (LabelH * 0.5))
+	Text.begin("Old")
 
-	if Mouse.IsReleased(1) then
-		SaturationFocused = false
-		TintFocused = false
-		AlphaFocused = false
+	if Mouse.is_released(1) then
+		saturation_focused = false
+		tint_focused = false
+		alpha_focused = false
 	end
 
-	Cursor.SetPosition(InputX, InputY)
-	Cursor.NewLine()
+	Cursor.set_position(input_x, input_y)
+	Cursor.new_line()
 
-	LayoutManager.Begin('ColorPicker_Buttons_Layout', {AlignX = 'right'})
-	local Result = {Button = "", Color = Utility.MakeColor(CurrentColor)}
-	if Button.Begin("OK") then
-		Result.Button = "OK"
+	LayoutManager.begin("ColorPicker_Buttons_Layout", {align_x = "right"})
+	local result = {button = "", colour = Utility.make_color(current_color)}
+	if Button.begin("OK") then
+		result.button = "OK"
 	end
 
-	LayoutManager.SameLine()
+	LayoutManager.same_line()
 
-	if Button.Begin("Cancel") then
-		Result.Button = "Cancel"
-		Result.Color = Utility.MakeColor(Options.Color)
+	if Button.begin("Cancel") then
+		result.button = "Cancel"
+		result.colour = Utility.make_color(options.colour)
 	end
-	LayoutManager.End()
+	LayoutManager.finish()
 
-	Window.End()
+	Window.finish()
 
-	return Result
+	return result
 end
 
 return ColorPicker

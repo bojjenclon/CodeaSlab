@@ -1,274 +1,249 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 local abs = math.abs
 local max = math.max
 local min = math.min
 local huge = math.huge
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Stats = required("Stats")
+local Window = required("Window")
 
 local Shape = {}
-local Curve = nil
-local CurveX, CurveY = 0, 0
 
-function Shape.Rectangle(Options)
-	local StatHandle = Stats.Begin('Rectangle', 'Slab')
+local curve = nil
+local curve_x, curve_y = 0, 0
 
-	Options = Options == nil and {} or Options
-	Options.Mode = Options.Mode == nil and 'fill' or Options.Mode
-	Options.W = Options.W == nil and 32 or Options.W
-	Options.H = Options.H == nil and 32 or Options.H
-	Options.Color = Options.Color == nil and nil or Options.Color
-	Options.Rounding = Options.Rounding == nil and 2.0 or Options.Rounding
-	Options.Outline = Options.Outline == nil and false or Options.Outline
-	Options.OutlineColor = Options.OutlineColor == nil and {0.0, 0.0, 0.0, 1.0} or Options.OutlineColor
-	Options.Segments = Options.Segments == nil and 10 or Options.Segments
+function Shape.rectangle(options)
+	local stat_handle = Stats.begin("rectangle", "Slab")
 
-	local W = Options.W
-	local H = Options.H
-	LayoutManager.AddControl(W, H)
+	options = options == nil and {} or options
+	options.mode = options.mode == nil and "fill" or options.mode
+	options.w = options.w == nil and 32 or options.w
+	options.h = options.h == nil and 32 or options.h
+	options.colour = options.colour == nil and nil or options.colour
+	options.rounding = options.rounding == nil and 2.0 or options.rounding
+	options.outline = options.outline == nil and false or options.outline
+	options.outline_color = options.outline_color == nil and {0.0, 0.0, 0.0, 1.0} or options.outline_color
+	options.segments = options.segments == nil and 10 or options.segments
 
-	local X, Y = Cursor.GetPosition()
+	local w = options.w
+	local h = options.h
+	LayoutManager.add_control(w, h)
 
-	if Options.Outline then
-		DrawCommands.Rectangle('line', X, Y, W, H, Options.OutlineColor, Options.Rounding, Options.Segments)
+	local x, y = Cursor.get_position()
+
+	if options.outline then
+		DrawCommands.rectangle("line", x, y, w, h, options.outline_color, options.rounding, options.segments)
 	end
 
-	DrawCommands.Rectangle(Options.Mode, X, Y, W, H, Options.Color, Options.Rounding, Options.Segments)
+	DrawCommands.rectangle(options.mode, x, y, w, h, options.colour, options.rounding, options.segments)
 
-	Window.AddItem(X, Y, W, H)
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(H)
+	Window.add_item(x, y, w, h)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Shape.Circle(Options)
-	local StatHandle = Stats.Begin('Circle', 'Slab')
+function Shape.circle(options)
+	local stat_handle = Stats.begin("circle", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Mode = Options.Mode == nil and 'fill' or Options.Mode
-	Options.Radius = Options.Radius == nil and 12.0 or Options.Radius
-	Options.Color = Options.Color == nil and nil or Options.Color
-	Options.Segments = Options.Segments == nil and nil or Options.Segments
+	options = options == nil and {} or options
+	options.mode = options.mode == nil and "fill" or options.mode
+	options.radius = options.radius == nil and 12.0 or options.radius
+	options.colour = options.colour == nil and nil or options.colour
+	options.segments = options.segments == nil and nil or options.segments
 
-	local Diameter = Options.Radius * 2.0
+	local diameter = options.radius * 2.0
 
-	LayoutManager.AddControl(Diameter, Diameter)
+	LayoutManager.add_control(diameter, diameter)
 
-	local X, Y = Cursor.GetPosition()
-	local CenterX = X + Options.Radius
-	local CenterY = Y + Options.Radius
+	local x, y = Cursor.get_position()
+	local center_x = x + options.radius
+	local center_y = y + options.radius
 
-	DrawCommands.Circle(Options.Mode, CenterX, CenterY, Options.Radius, Options.Color, Options.Segments)
-	Window.AddItem(X, Y, Diameter, Diameter)
-	Cursor.SetItemBounds(X, Y, Diameter, Diameter)
-	Cursor.AdvanceY(Diameter)
+	DrawCommands.circle(options.mode, center_x, center_y, options.radius, options.colour, options.segments)
+	Window.add_item(x, y, diameter, diameter)
+	Cursor.set_item_bounds(x, y, diameter, diameter)
+	Cursor.advance_y(diameter)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Shape.Triangle(Options)
-	local StatHandle = Stats.Begin('Triangle', 'Slab')
+function Shape.triangle(options)
+	local stat_handle = Stats.begin("triangle", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Mode = Options.Mode == nil and 'fill' or Options.Mode
-	Options.Radius = Options.Radius == nil and 12 or Options.Radius
-	Options.Rotation = Options.Rotation == nil and 0 or Options.Rotation
-	Options.Color = Options.Color == nil and nil or Options.Color
+	options = options == nil and {} or options
+	options.mode = options.mode == nil and "fill" or options.mode
+	options.radius = options.radius == nil and 12 or options.radius
+	options.rotation = options.rotation == nil and 0 or options.rotation
+	options.colour = options.colour == nil and nil or options.colour
 
-	local Diameter = Options.Radius * 2.0
+	local diameter = options.radius * 2.0
 
-	LayoutManager.AddControl(Diameter, Diameter)
+	LayoutManager.add_control(diameter, diameter)
 
-	local X, Y = Cursor.GetPosition()
-	local CenterX = X + Options.Radius
-	local CenterY = Y + Options.Radius
+	local x, y = Cursor.get_position()
+	local center_x = x + options.radius
+	local center_y = y + options.radius
 
-	DrawCommands.Triangle(Options.Mode, CenterX, CenterY, Options.Radius, Options.Rotation, Options.Color)
-	Window.AddItem(X, Y, Diameter, Diameter)
-	Cursor.SetItemBounds(X, Y, Diameter, Diameter)
-	Cursor.AdvanceY(Diameter)
+	DrawCommands.triangle(options.mode, center_x, center_y, options.radius, options.rotation, options.colour)
+	Window.add_item(x, y, diameter, diameter)
+	Cursor.set_item_bounds(x, y, diameter, diameter)
+	Cursor.advance_y(diameter)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Shape.Line(X2, Y2, Options)
-	local StatHandle = Stats.Begin('Line', 'Slab')
+function Shape.line(x_2, y_2, options)
+	local stat_handle = Stats.begin("line", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Width = Options.Width == nil and 1.0 or Options.Width
-	Options.Color = Options.Color == nil and nil or Options.Color
+	options = options == nil and {} or options
+	options.width = options.width == nil and 1.0 or options.width
+	options.colour = options.colour == nil and nil or options.colour
 
-	local X, Y = Cursor.GetPosition()
-	local W, H = abs(X2 - X), abs(Y2 - Y)
-	H = max(H, Options.Width)
+	local x, y = Cursor.get_position()
+	local w, h = abs(x_2 - x), abs(y_2 - y)
+	h = max(h, options.width)
 
-	DrawCommands.Line(X, Y, X2, Y2, Options.Width, Options.Color)
-	Window.AddItem(X, Y, W, H)
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(H)
+	DrawCommands.line(x, y, x_2, y_2, options.width, options.colour)
+	Window.add_item(x, y, w, h)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Shape.Curve(Points, Options)
-	local StatHandle = Stats.Begin('Curve', 'Slab')
+function Shape.curve(points, options)
+	local stat_handle = Stats.begin("curve", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and nil or Options.Color
-	Options.Depth = Options.Depth == nil and nil or Options.Depth
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and nil or options.colour
+	options.depth = options.depth == nil and nil or options.depth
 
-	Curve = love.math.newBezierCurve(Points)
+	curve = love.math.newBezierCurve(points)
 
-	local MinX, MinY = huge, huge
-	local MaxX, MaxY = 0, 0
-	for I = 1, Curve:getControlPointCount(), 1 do
-		local PX, PY = Curve:getControlPoint(I)
-		MinX = min(MinX, PX)
-		MinY = min(MinY, PY)
+	local min_x, min_y = huge, huge
+	local max_x, max_y = 0, 0
+	for i = 1, curve:getControlPointCount(), 1 do
+		local p_x, p_y = curve:getControlPoint(i)
+		min_x = min(min_x, p_x)
+		min_y = min(min_y, p_y)
 
-		MaxX = max(MaxX, PX)
-		MaxY = max(MaxY, PY)
+		max_x = max(max_x, p_x)
+		max_y = max(max_y, p_y)
 	end
 
-	local W = abs(MaxX - MinX)
-	local H = abs(MaxY - MinY)
+	local w = abs(max_x - min_x)
+	local h = abs(max_y - min_y)
 
-	LayoutManager.AddControl(W, H)
+	LayoutManager.add_control(w, h)
 
-	CurveX, CurveY = Cursor.GetPosition()
-	Curve:translate(CurveX, CurveY)
+	curve_x, curve_y = Cursor.get_position()
+	curve:translate(curve_x, curve_y)
 
-	DrawCommands.Curve(Curve:render(Options.Depth), Options.Color)
-	Window.AddItem(MinX, MinY, W, H)
-	Cursor.SetItemBounds(MinX, MinY, W, H)
-	Cursor.AdvanceY(H)
+	DrawCommands.curve(curve:render(options.depth), options.colour)
+	Window.add_item(min_x, min_y, w, h)
+	Cursor.set_item_bounds(min_x, min_y, w, h)
+	Cursor.advance_y(h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Shape.GetCurveControlPointCount()
-	if Curve ~= nil then
-		return Curve:getControlPointCount()
+function Shape.get_curve_control_point_count()
+	if curve ~= nil then
+		return curve:getControlPointCount()
 	end
 
 	return 0
 end
 
-function Shape.GetCurveControlPoint(Index, Options)
-	Options = Options == nil and {} or Options
-	Options.LocalSpace = Options.LocalSpace == nil and true or Options.LocalSpace
+function Shape.get_curve_control_point(index, options)
+	options = options == nil and {} or options
+	options.local_space = options.local_space == nil and true or options.local_space
 
-	local X, Y = 0, 0
-	if Curve ~= nil then
-		if Options.LocalSpace then
-			Curve:translate(-CurveX, -CurveY)
+	local x, y = 0, 0
+	if curve ~= nil then
+		if options.local_space then
+			curve:translate(-curve_x, -curve_y)
 		end
 
-		X, Y = Curve:getControlPoint(Index)
+		x, y = curve:getControlPoint(index)
 
-		if Options.LocalSpace then
-			Curve:translate(CurveX, CurveY)
+		if options.local_space then
+			curve:translate(curve_x, curve_y)
 		end
 	end
 
-	return X, Y
+	return x, y
 end
 
-function Shape.EvaluateCurve(Time, Options)
-	Options = Options == nil and {} or Options
-	Options.LocalSpace = Options.LocalSpace == nil and true or Options.LocalSpace
+function Shape.evaluate_curve(time, options)
+	options = options == nil and {} or options
+	options.local_space = options.local_space == nil and true or options.local_space
 
-	local X, Y = 0, 0
-	if Curve ~= nil then
-		if Options.LocalSpace then
-			Curve:translate(-CurveX, -CurveY)
+	local x, y = 0, 0
+	if curve ~= nil then
+		if options.local_space then
+			curve:translate(-curve_x, -curve_y)
 		end
 
-		X, Y = Curve:evaluate(Time)
+		x, y = curve:evaluate(time)
 
-		if Options.LocalSpace then
-			Curve:translate(CurveX, CurveY)
+		if options.local_space then
+			curve:translate(curve_x, curve_y)
 		end
 	end
 
-	return X, Y
+	return x, y
 end
 
-function Shape.Polygon(Points, Options)
-	local StatHandle = Stats.Begin('Polygon', 'Slab')
+function Shape.polygon(points, options)
+	local stat_handle = Stats.begin("polygon", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Color = Options.Color == nil and nil or Options.Color
-	Options.Mode = Options.Mode == nil and 'fill' or Options.Mode
+	options = options == nil and {} or options
+	options.colour = options.colour == nil and nil or options.colour
+	options.mode = options.mode == nil and "fill" or options.mode
 
-	local MinX, MinY = huge, huge
-	local MaxX, MaxY = 0, 0
-	local Verts = {}
+	local min_x, min_y = huge, huge
+	local max_x, max_y = 0, 0
+	local verts = {}
 
-	for I = 1, #Points, 2 do
-		MinX = min(MinX, Points[I])
-		MinY = min(MinY, Points[I+1])
+	for i = 1, #points, 2 do
+		min_x = min(min_x, points[i])
+		min_y = min(min_y, points[i + 1])
 
-		MaxX = max(MaxX, Points[I])
-		MaxY = max(MaxY, Points[I+1])
+		max_x = max(max_x, points[i])
+		max_y = max(max_y, points[i + 1])
 	end
 
-	local W = abs(MaxX - MinX)
-	local H = abs(MaxY - MinY)
+	local w = abs(max_x - min_x)
+	local h = abs(max_y - min_y)
 
-	LayoutManager.AddControl(W, H)
+	LayoutManager.add_control(w, h)
 
-	MinX, MinY = huge, huge
-	MaxX, MaxY = 0, 0
-	local X, Y = Cursor.GetPosition()
-	for I = 1, #Points, 2 do
-		insert(Verts, Points[I] + X)
-		insert(Verts, Points[I+1] + Y)
+	min_x, min_y = huge, huge
+	max_x, max_y = 0, 0
+	local x, y = Cursor.get_position()
+	for i = 1, #points, 2 do
+		insert(verts, points[i] + x)
+		insert(verts, points[i + 1] + y)
 
-		MinX = min(MinX, Verts[I])
-		MinY = min(MinY, Verts[I+1])
+		min_x = min(min_x, verts[i])
+		min_y = min(min_y, verts[i + 1])
 
-		MaxX = max(MaxX, Verts[I])
-		MaxY = max(MaxY, Verts[I+1])
+		max_x = max(max_x, verts[i])
+		max_y = max(max_y, verts[i + 1])
 	end
 
-	DrawCommands.Polygon(Options.Mode, Verts, Options.Color)
-	Window.AddItem(MinX, MinY, W, H)
-	Cursor.SetItemBounds(MinX, MinY, W, H)
-	Cursor.AdvanceY(H)
+	DrawCommands.polygon(options.mode, verts, options.colour)
+	Window.add_item(min_x, min_y, w, h)
+	Cursor.set_item_bounds(min_x, min_y, w, h)
+	Cursor.advance_y(h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
 return Shape

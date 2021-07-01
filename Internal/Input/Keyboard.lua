@@ -1,131 +1,108 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 
-local Common = require(SLAB_PATH .. '.Internal.Input.Common')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
+local Common = required("Common")
+local Stats = required("Stats")
+local Utility = required("Utility")
 
 local Keyboard = {}
 
-local KeyPressedFn = nil
-local KeyReleasedFn = nil
-local Events = {}
-local Keys = {}
+local key_pressed_fn = nil
+local key_released_fn = nil
+local events = {}
+local keys = {}
 
-local function PushEvent(Type, Key, Scancode, IsRepeat)
-	insert(Events, {
-		Type = Type,
-		Key = Key,
-		Scancode = Scancode,
-		IsRepeat = IsRepeat,
-		Frame = Stats.GetFrameNumber()
-	})
+local function push_event(t, key, Scancode, IsRepeat)
+	insert(
+		events,
+		{
+			t = t,
+			key = key,
+			Scancode = Scancode,
+			IsRepeat = IsRepeat,
+			Frame = Stats.get_frame_number()
+		}
+	)
 end
 
-local function OnKeyPressed(Key, Scancode, IsRepeat)
-	PushEvent(Common.Event.Pressed, Key, Scancode, IsRepeat)
+local function on_key_pressed(key, Scancode, IsRepeat)
+	push_event(Common.Event.Pressed, key, Scancode, IsRepeat)
 
-	if KeyPressedFn ~= nil then
-		KeyPressedFn(Key, Scancode, IsRepeat)
+	if key_pressed_fn ~= nil then
+		key_pressed_fn(key, Scancode, IsRepeat)
 	end
 end
 
-local function OnKeyReleased(Key, Scancode)
-	PushEvent(Common.Event.Released, Key, Scancode, false)
+local function on_key_released(key, Scancode)
+	push_event(Common.Event.Released, key, Scancode, false)
 
-	if KeyReleasedFn ~= nil then
-		KeyReleasedFn(Key, Scancode)
+	if key_released_fn ~= nil then
+		key_released_fn(key, Scancode)
 	end
 end
 
-local function ProcessEvents()
-	Keys = {}
+local function process_events()
+	keys = {}
 
 	-- Soft keyboards found on mobile/tablet devices will push keypressed/keyreleased events when the user
 	-- releases from the pressed key. All released events pushed as the same frame as the pressed events will be
 	-- pushed to the events table for the next frame to process.
 	local NextEvents = {}
 
-	for I, V in ipairs(Events) do
-		if Keys[V.Scancode] == nil then
-			Keys[V.Scancode] = {}
+	for i, v in ipairs(events) do
+		if keys[v.Scancode] == nil then
+			keys[v.Scancode] = {}
 		end
 
-		local Key = Keys[V.Scancode]
+		local key = keys[v.Scancode]
 
-		if Utility.IsMobile() and V.Type == Common.Event.Released and Key.Frame == V.Frame then
-			V.Frame = V.Frame + 1
-			insert(NextEvents, V)
+		if Utility.is_mobile() and v.t == Common.Event.Released and key.Frame == v.Frame then
+			v.Frame = v.Frame + 1
+			insert(NextEvents, v)
 		else
-			Key.Type = V.Type
-			Key.Key = V.Key
-			Key.Scancode = V.Scancode
-			Key.IsRepeat = V.IsRepeat
-			Key.Frame = V.Frame
+			key.t = v.t
+			key.key = v.key
+			key.Scancode = v.Scancode
+			key.IsRepeat = v.IsRepeat
+			key.Frame = v.Frame
 		end
 	end
 
-	Events = NextEvents
+	events = NextEvents
 end
 
-function Keyboard.Initialize(Args)
-	KeyPressedFn = love.handlers['keypressed']
-	KeyReleasedFn = love.handlers['keyreleased']
-	love.handlers['keypressed'] = OnKeyPressed
-	love.handlers['keyreleased'] = OnKeyReleased
+function Keyboard.initialize(Args)
+	key_pressed_fn = love.handlers["keypressed"]
+	key_released_fn = love.handlers["keyreleased"]
+	love.handlers["keypressed"] = on_key_pressed
+	love.handlers["keyreleased"] = on_key_released
 end
 
-function Keyboard.Update()
-	ProcessEvents()
+function Keyboard.update()
+	process_events()
 end
 
-function Keyboard.IsPressed(Key)
-	local Item = Keys[Key]
+function Keyboard.is_pressed(key)
+	local item = keys[key]
 
-	if Item == nil then
+	if item == nil then
 		return false
 	end
 
-	return Item.Type == Common.Event.Pressed
+	return item.t == Common.Event.Pressed
 end
 
-function Keyboard.IsReleased(Key)
-	local Item = Keys[Key]
+function Keyboard.is_released(key)
+	local item = keys[key]
 
-	if Item == nil then
+	if item == nil then
 		return false
 	end
 
-	return Item.Type == Common.Event.Released
+	return item.t == Common.Event.Released
 end
 
-function Keyboard.IsDown(Key)
-	return love.keyboard.isScancodeDown(Key)
+function Keyboard.is_down(key)
+	return love.keyboard.isScancodeDown(key)
 end
 
 return Keyboard

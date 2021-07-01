@@ -1,112 +1,89 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 local format = string.format
 local min = math.min
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Style = required("Style")
+local text = required("text")
+local Window = required("Window")
+local Utility = required("Utility")
 
 local Tooltip = {}
-local LastDisplayTime = 0.0
-local AccumDisplayTime = 0.0
-local TooltipTime = 0.75
-local TooltipExpireTime = 0.025
-local Alpha = 0.0
-local OffsetY = 0.0
-local ResetSize = false
 
-function Tooltip.Begin(Tip)
-	if Tip == nil or Tip == "" then
+local last_display_time = 0.0
+local accum_display_time = 0.0
+local tooltip_time = 0.75
+local tooltip_expire_time = 0.025
+local alpha = 0.0
+local offset_y = 0.0
+local reset_size = false
+
+function Tooltip.begin(tip)
+	if tip == nil or tip == "" then
 		return
 	end
 
-	local Elapsed = love.timer.getTime() - LastDisplayTime
-	if Elapsed > TooltipExpireTime then
-		AccumDisplayTime = 0.0
-		Alpha = 0.0
-		ResetSize = true
+	local elapsed = ElapsedTime - last_display_time
+	if elapsed > tooltip_expire_time then
+		accum_display_time = 0.0
+		alpha = 0.0
+		reset_size = true
 	end
 
-	local DeltaTime = love.timer.getDelta()
-	AccumDisplayTime = AccumDisplayTime + DeltaTime
-	LastDisplayTime = love.timer.getTime()
+	local delta_time = love.timer.getDelta()
+	accum_display_time = accum_display_time + delta_time
+	last_display_time = ElapsedTime
 
-	if AccumDisplayTime > TooltipTime then
-		local X, Y = Mouse.Position()
-		Alpha = min(Alpha + DeltaTime * 4.0, 1.0)
-		local BgColor = Utility.MakeColor(Style.WindowBackgroundColor)
-		local TextColor = Utility.MakeColor(Style.TextColor)
-		BgColor[4] = Alpha
-		TextColor[4] = Alpha
+	if accum_display_time > tooltip_time then
+		local x, y = Mouse.position()
+		alpha = min(alpha + delta_time * 4.0, 1.0)
+		local bg_color = Utility.make_color(Style.WindowBackgroundColor)
+		local text_color = Utility.make_color(Style.text_color)
+		bg_color[4] = alpha
+		text_color[4] = alpha
 
-		local CursorX, CursorY = Cursor.GetPosition()
+		local cursor_x, cursor_y = Cursor.get_position()
 
-		LayoutManager.Begin('Ignore', {Ignore = true})
-		Window.Begin('tooltip',
-		{
-			X = X,
-			Y = Y - OffsetY,
-			W = 0,
-			H = 0,
-			AutoSizeWindow = true,
-			AutoSizeContent = false,
-			AllowResize = false,
-			AllowFocus = false,
-			Layer = 'ContextMenu',
-			ResetWindowSize = ResetSize,
-			CanObstruct = false,
-			NoSavedSettings = true
-		})
-		Text.BeginFormatted(Tip, {Color = TextColor})
-		OffsetY = Window.GetHeight()
-		Window.End()
-		LayoutManager.End()
-		Cursor.SetPosition(CursorX, CursorY)
-		ResetSize = false
+		LayoutManager.begin("ignore", {ignore = true})
+		Window.begin(
+			"Tooltip",
+			{
+				x = x,
+				y = y - offset_y,
+				w = 0,
+				h = 0,
+				auto_size_window = true,
+				auto_size_content = false,
+				allow_resize = false,
+				allow_focus = false,
+				layer = "ContextMenu",
+				reset_window_size = reset_size,
+				can_obstruct = false,
+				no_saved_settings = true
+			}
+		)
+		Text.begin_formatted(tip, {colour = text_color})
+		offset_y = Window.get_height()
+		Window.finish()
+		LayoutManager.finish()
+		Cursor.set_position(cursor_x, cursor_y)
+		reset_size = false
 	end
 end
 
-function Tooltip.GetDebugInfo()
-	local Info = {}
+function Tooltip.get_debug_info()
+	local info = {}
 
-	local Elapsed = love.timer.getTime() - LastDisplayTime
-	insert(Info, format("Time: %.2f", AccumDisplayTime))
-	insert(Info, format("Is Visible: %s", tostring(AccumDisplayTime > TooltipTime and Elapsed <= TooltipExpireTime)))
-	insert(Info, format("Time to Display: %.2f", TooltipTime))
-	insert(Info, format("Expire Time: %f", TooltipExpireTime))
+	local elapsed = ElapsedTime - last_display_time
+	insert(info, format("time: %.2f", accum_display_time))
+	insert(info, format("Is Visible: %s", tostring(accum_display_time > tooltip_time and elapsed <= tooltip_expire_time)))
+	insert(info, format("time to Display: %.2f", tooltip_time))
+	insert(info, format("Expire time: %f", tooltip_expire_time))
 
-	return Info
+	return info
 end
 
 return Tooltip

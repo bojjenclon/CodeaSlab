@@ -1,120 +1,94 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
-local FileSystem = require(SLAB_PATH .. '.Internal.Core.FileSystem')
+local FileSystem = required("FileSystem")
 
 local Config = {}
 local DecodeValueFn = nil
 local Section = nil
 
-local function IsBasicType(Value)
-	if Value ~= nil then
-		local Type = type(Value)
+local function IsBasicType(value)
+	if value ~= nil then
+		local t = type(value)
 
-		return Type == "number" or Type == "boolean" or Type == "string"
+		return t == "number" or t == "boolean" or t == "string"
 	end
 
 	return false
 end
 
-local function IsArray(Table)
-	if Table ~= nil and type(Table) == "table" then
+local function IsArray(tbl)
+	if tbl ~= nil and type(tbl) == "table" then
 		local N = 0
-		for K, V in pairs(Table) do
-			if type(K) ~= "number" then
+		for k, v in pairs(tbl) do
+			if type(k) ~= "number" then
 				return false
 			end
 
-			if not IsBasicType(V) then
+			if not IsBasicType(v) then
 				return false
 			end
 
 			N = N + 1
 		end
 
-		return #Table == N
+		return #tbl == N
 	end
 
 	return false
 end
 
-local function EncodeValue(Value)
-	local Result = ""
+local function EncodeValue(value)
+	local result = ""
 
-	if Value ~= nil then
-		local Type = type(Value)
-		if Type == "boolean" then
-			Result = Value == true and "true" or "false"
-		elseif Type == "number" or Type == "string" then
-			Result = tostring(Value)
+	if value ~= nil then
+		local t = type(value)
+		if t == "boolean" then
+			result = value == true and "true" or "false"
+		elseif t == "number" or t == "string" then
+			result = tostring(value)
 		end
 	end
 
-	return Result
+	return result
 end
 
-local function EncodePair(Key, Value)
-	local Result = tostring(Key) .. " = "
+local function EncodePair(key, value)
+	local result = tostring(key) .. " = "
 
-	if Value ~= nil then
-		if type(Value) == "table" then
-			if IsArray(Value) then
-				Result = Result .. "(" .. table.concat(Value, ",") .. ")\n"
+	if value ~= nil then
+		if type(value) == "table" then
+			if IsArray(value) then
+				result = result .. "(" .. table.concat(value, ",") .. ")\n"
 			else
-				Result = Result .. "{"
+				result = result .. "{"
 				local First = true
-				for K, V in pairs(Value) do
+				for k, v in pairs(value) do
 					if not First then
-						Result = Result .. ","
+						result = result .. ","
 					end
-					Result = Result .. K .. "=" .. EncodeValue(V)
+					result = result .. k .. "=" .. EncodeValue(v)
 					First = false
 				end
-				Result = Result .. "}\n"
+				result = result .. "}\n"
 			end
-		elseif IsBasicType(Value) then
-			Result = Result .. tostring(Value) .. "\n"
+		elseif IsBasicType(value) then
+			result = result .. tostring(value) .. "\n"
 		end
 	end
 
-	return Result
+	return result
 end
 
 local function EncodeSection(Section, Values)
-	local Result = "[" .. Section .. "]\n"
+	local result = "[" .. Section .. "]\n"
 
-	for K, V in pairs(Values) do
-		Result = Result .. EncodePair(K, V)
+	for k, v in pairs(Values) do
+		result = result .. EncodePair(k, v)
 	end
 
-	return Result .. "\n"
+	return result .. "\n"
 end
 
-local function DecodeBoolean(Value)
-	local Lower = string.lower(Value)
+local function DecodeBoolean(value)
+	local Lower = string.lower(value)
 
 	if Lower == "true" then
 		return true
@@ -125,74 +99,74 @@ local function DecodeBoolean(Value)
 	return nil
 end
 
-local function DecodeArray(Value)
-	local Result = nil
+local function DecodeArray(value)
+	local result = nil
 
-	if string.sub(Value, 1, 1) == "(" then
-		Result = {}
-		local Index = 1
+	if string.sub(value, 1, 1) == "(" then
+		result = {}
+		local index = 1
 		local Buffer = ""
 
-		while Index <= #Value do
-			local Ch = string.sub(Value, Index, Index)
+		while index <= #value do
+			local ch = string.sub(value, index, index)
 
-			if Ch == ',' or Ch == ')' then
-				local Item = DecodeValueFn(Buffer)
-				if Item ~= nil then
-					table.insert(Result, Item)
+			if ch == "," or ch == ")" then
+				local item = DecodeValueFn(Buffer)
+				if item ~= nil then
+					table.insert(result, item)
 				end
 				Buffer = ""
-			elseif Ch ~= "(" and Ch ~= " " then
-				Buffer = Buffer .. Ch
+			elseif ch ~= "(" and ch ~= " " then
+				Buffer = Buffer .. ch
 			end
 
-			Index = Index + 1
+			index = index + 1
 		end
 	end
 
-	return Result
+	return result
 end
 
-local function DecodeTable(Value)
-	local Result = nil
+local function DecodeTable(value)
+	local result = nil
 
-	if string.sub(Value, 1, 1) == "{" then
-		Result = {}
-		for K, V in string.gmatch(Value, "(%w+)=(%-?%w+)") do
-			Result[K] = DecodeValueFn(V)
+	if string.sub(value, 1, 1) == "{" then
+		result = {}
+		for k, v in string.gmatch(value, "(%w+)=(%-?%w+)") do
+			result[k] = DecodeValueFn(v)
 		end
 	end
 
-	return Result
+	return result
 end
 
-local function DecodeValue(Value)
-	if Value ~= nil and Value ~= "" then
-		local Number = tonumber(Value)
+local function DecodeValue(value)
+	if value ~= nil and value ~= "" then
+		local Number = tonumber(value)
 		if Number ~= nil then
 			return Number
 		end
 
-		local Boolean = DecodeBoolean(Value)
+		local Boolean = DecodeBoolean(value)
 		if Boolean ~= nil then
 			return Boolean
 		end
 
-		if Value == "nil" then
+		if value == "nil" then
 			return nil
 		end
 
-		local Array = DecodeArray(Value)
+		local Array = DecodeArray(value)
 		if Array ~= nil then
 			return Array
 		end
 
-		local Table = DecodeTable(Value)
-		if Table ~= nil then
-			return Table
+		local tbl = DecodeTable(value)
+		if tbl ~= nil then
+			return tbl
 		end
 
-		return Value
+		return value
 	end
 
 	return nil
@@ -200,123 +174,123 @@ end
 
 DecodeValueFn = DecodeValue
 
-local function DecodeLine(Line, Result)
-	if string.sub(Line, 1, 1) == ";" then
+local function DecodeLine(line, result)
+	if string.sub(line, 1, 1) == ";" then
 		return
 	end
 
-	if string.sub(Line, 1, 1) == "[" and string.sub(Line, #Line, #Line) == "]" then
-		local Key = string.sub(Line, 2, #Line - 1)
-		Result[Key] = {}
-		Section = Result[Key]
+	if string.sub(line, 1, 1) == "[" and string.sub(line, #line, #line) == "]" then
+		local key = string.sub(line, 2, #line - 1)
+		result[key] = {}
+		Section = result[key]
 	end
 
-	local Index = string.find(Line, "=", 1, true)
+	local index = string.find(line, "=", 1, true)
 
-	if Index ~= nil then
-		local Key = string.sub(Line, 1, Index - 1)
-		Key = string.gsub(Key, " ", "")
+	if index ~= nil then
+		local key = string.sub(line, 1, index - 1)
+		key = string.gsub(key, " ", "")
 
-		local Value = string.sub(Line, Index + 1)
-		Value = string.gsub(Value, " ", "")
+		local value = string.sub(line, index + 1)
+		value = string.gsub(value, " ", "")
 
-		if string.sub(Value, #Value, #Value) == "," then
-			Value = string.sub(Value, 1, #Value - 1)
+		if string.sub(value, #value, #value) == "," then
+			value = string.sub(value, 1, #value - 1)
 		end
 
 		if Section ~= nil then
-			Section[Key] = DecodeValue(Value)
+			Section[key] = DecodeValue(value)
 		else
-			Result[Key] = DecodeValue(Value)
+			result[key] = DecodeValue(value)
 		end
 	end
 end
 
-function Config.Encode(Table)
-	local Result = ""
+function Config.Encode(tbl)
+	local result = ""
 
-	if type(Table) == "table" and not IsArray(Table) then
+	if type(tbl) == "table" and not IsArray(tbl) then
 		local Sections = {}
-		for K, V in pairs(Table) do
-			if type(V) == "table" and not IsArray(V) then
-				Sections[K] = V
+		for k, v in pairs(tbl) do
+			if type(v) == "table" and not IsArray(v) then
+				Sections[k] = v
 			else
-				Result = Result .. EncodePair(K, V)
+				result = result .. EncodePair(k, v)
 			end
 		end
 
-		if string.len(Result) > 0 then
-			Result = Result .. "\n"
+		if string.len(result) > 0 then
+			result = result .. "\n"
 		end
 
-		for K, V in pairs(Sections) do
-			Result = Result .. EncodeSection(K, V)
+		for k, v in pairs(Sections) do
+			result = result .. EncodeSection(k, v)
 		end
 	end
 
-	return Result
+	return result
 end
 
 function Config.Decode(Stream)
-	local Result = nil
-	local Error = ""
+	local result = nil
+	local err = ""
 
 	if Stream ~= nil then
 		if type(Stream) == "string" then
-			Result = {}
+			result = {}
 
-			local Start = 1
-			local End = string.find(Stream, "\n", Start, true)
-			local Line = ""
+			local start = 1
+			local finish = string.find(Stream, "\n", start, true)
+			local line = ""
 
-			while End ~= nil do
-				Line = string.sub(Stream, Start, End - 1)
+			while finish ~= nil do
+				line = string.sub(Stream, start, finish - 1)
 
-				DecodeLine(Line, Result)
+				DecodeLine(line, result)
 
-				Start = End + 1
-				End = string.find(Stream, "\n", Start, true)
+				start = finish + 1
+				finish = string.find(Stream, "\n", start, true)
 			end
 
-			Line = string.sub(Stream, Start)
+			line = string.sub(Stream, start)
 
-			DecodeLine(Line, Result)
+			DecodeLine(line, result)
 		else
-			Error = "Invalid type given for Stream. Type given is " .. type(Stream) .. "."
+			err = "Invalid t given for Stream. t given is " .. type(Stream) .. "."
 		end
 	else
-		Error = "Invalid stream given to Config.Decode!"
+		err = "Invalid stream given to Config.Decode!"
 	end
 
-	return Result, Error
+	return result, err
 end
 
-function Config.LoadFile(Path, UseLoveFS)
-	local Result = nil
-	local Contents, Error = nil, nil
+function Config.load_file(path, UseLoveFS)
+	local result = nil
+	local Contents, err = nil, nil
 	if UseLoveFS then
-		Contents, Error = love.filesystem.read('string', Path)
+		Contents, err = love.filesystem.read("string", path)
 	else
-		Contents, Error = FileSystem.ReadContents(Path)
+		Contents, err = FileSystem.ReadContents(path)
 	end
 	if Contents ~= nil then
-		Result, Error = Config.Decode(Contents)
+		result, err = Config.Decode(Contents)
 	end
 
-	return Result, Error
+	return result, err
 end
 
-function Config.Save(Path, Table)
-	local Result = false
-	local Error = ""
-	if Table ~= nil then
-		local Contents = Config.Encode(Table)
-		Result, Error = FileSystem.SaveContents(Path, Contents)
+function Config.save(path, tbl)
+	local result = false
+	local err = ""
+	if tbl ~= nil then
+		local Contents = Config.Encode(tbl)
+		result, err = FileSystem.SaveContents(path, Contents)
 	else
-		Error = "Invalid table given to Config.Save!"
+		err = "Invalid table given to Config.save!"
 	end
 
-	return Result, Error
+	return result, err
 end
 
 return Config

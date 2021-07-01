@@ -1,218 +1,200 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Region = require(SLAB_PATH .. '.Internal.UI.Region')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Region = required("Region")
+local Stats = required("Stats")
+local Style = required("Style")
+local text = required("text")
+local Window = required("Window")
 
 local ListBox = {}
-local Instances = {}
-local ActiveInstance = nil
 
-local function GetItemInstance(Instance, Id)
-	if Instance ~= nil then
-		if Instance.Items[Id] == nil then
-			local Item = {}
-			Item.Id = Id
-			Item.X = 0.0
-			Item.Y = 0.0
-			Item.W = 0.0
-			Item.H = 0.0
-			Instance.Items[Id] = Item
+local instances = {}
+local active_instance = nil
+
+local function get_item_instance(instance, id)
+	if instance ~= nil then
+		if instance.items[id] == nil then
+			local item = {}
+			item.id = id
+			item.x = 0.0
+			item.y = 0.0
+			item.w = 0.0
+			item.h = 0.0
+			instance.items[id] = item
 		end
-		return Instance.Items[Id]
+		return instance.items[id]
 	end
 	return nil
 end
 
-local function GetInstance(Id)
-	if Instances[Id] == nil then
-		local Instance = {}
-		Instance.Id = Id
-		Instance.X = 0.0
-		Instance.Y = 0.0
-		Instance.W = 0.0
-		Instance.H = 0.0
-		Instance.Items = {}
-		Instance.ActiveItem = nil
-		Instance.HotItem = nil
-		Instance.Selected = false
-		Instance.StatHandle = nil
-		Instances[Id] = Instance
+local function get_instance(id)
+	if instances[id] == nil then
+		local instance = {}
+		instance.id = id
+		instance.x = 0.0
+		instance.y = 0.0
+		instance.w = 0.0
+		instance.h = 0.0
+		instance.items = {}
+		instance.active_item = nil
+		instance.hot_item = nil
+		instance.selected = false
+		instance.stat_handle = nil
+		instances[id] = instance
 	end
-	return Instances[Id]
+	return instances[id]
 end
 
-function ListBox.Begin(Id, Options)
-	local StatHandle = Stats.Begin('ListBox', 'Slab')
+function ListBox.begin(id, options)
+	local stat_handle = Stats.begin("ListBox", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.W = Options.W == nil and 150.0 or Options.W
-	Options.H = Options.H == nil and 150.0 or Options.H
-	Options.Clear = Options.Clear == nil and false or Options.Clear
-	Options.Rounding = Options.Rounding == nil and Style.WindowRounding or Options.Rounding
-	Options.StretchW = Options.StretchW or false
-	Options.StretchH = Options.StretchH or false
+	options = options == nil and {} or options
+	options.w = options.w == nil and 150.0 or options.w
+	options.h = options.h == nil and 150.0 or options.h
+	options.clear = options.clear == nil and false or options.clear
+	options.rounding = options.rounding == nil and Style.WindowRounding or options.rounding
+	options.stretch_w = options.stretch_w or false
+	options.stretch_h = options.stretch_h or false
 
-	local Instance = GetInstance(Window.GetItemId(Id))
-	local W = Options.W
-	local H = Options.H
+	local instance = get_instance(Window.get_item_id(id))
+	local w = options.w
+	local h = options.h
 
-	if Options.Clear then
-		Instance.Items = {}
+	if options.clear then
+		instance.items = {}
 	end
 
-	W, H = LayoutManager.ComputeSize(W, H)
-	LayoutManager.AddControl(W, H)
+	w, h = LayoutManager.compute_size(w, h)
+	LayoutManager.add_control(w, h)
 
-	local RemainingW, RemainingH = Window.GetRemainingSize()
-	if Options.StretchW then
-		W = RemainingW
+	local remaining_w, remaining_h = Window.get_remaining_size()
+	if options.stretch_w then
+		w = remaining_w
 	end
 
-	if Options.StretchH then
-		H = RemainingH
+	if options.stretch_h then
+		h = remaining_h
 	end
 
-	local X, Y = Cursor.GetPosition()
-	Instance.X = X
-	Instance.Y = Y
-	Instance.W = W
-	Instance.H = H
-	Instance.StatHandle = StatHandle
-	ActiveInstance = Instance
+	local x, y = Cursor.get_position()
+	instance.x = x
+	instance.y = y
+	instance.w = w
+	instance.h = h
+	instance.stat_handle = stat_handle
+	active_instance = instance
 
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(0.0)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(0.0)
 
-	Window.AddItem(X, Y, W, H, Instance.Id)
+	Window.add_item(x, y, w, h, instance.id)
 
-	local IsObstructed = Window.IsObstructedAtMouse()
+	local is_obstructed = Window.is_obstructed_at_mouse()
 
-	local TX, TY = Window.TransformPoint(X, Y)
-	local MouseX, MouseY = Window.GetMousePosition()
-	Region.Begin(Instance.Id, {
-		X = X,
-		Y = Y,
-		W = W,
-		H = H,
-		SX = TX,
-		SY = TY,
-		AutoSizeContent = true,
-		NoBackground = true,
-		Intersect = true,
-		MouseX = MouseX,
-		MouseY = MouseY,
-		ResetContent = Window.HasResized(),
-		IsObstructed = IsObstructed,
-		Rounding = Options.Rounding
-	})
+	local t_x, t_y = Window.transform_point(x, y)
+	local mouse_x, mouse_y = Window.get_mouse_position()
+	Region.begin(
+		instance.id,
+		{
+			x = x,
+			y = y,
+			w = w,
+			h = h,
+			s_x = t_x,
+			s_y = t_y,
+			auto_size_content = true,
+			no_background = true,
+			intersect = true,
+			mouse_x = mouse_x,
+			mouse_y = mouse_y,
+			reset_content = Window.has_resized(),
+			is_obstructed = is_obstructed,
+			rounding = options.rounding
+		}
+	)
 
-	Instance.HotItem = nil
-	local InRegion = Region.Contains(MouseX, MouseY)
-	MouseX, MouseY = Region.InverseTransform(Instance.Id, MouseX, MouseY)
-	for K, V in pairs(Instance.Items) do
-		if not IsObstructed
-			and not Region.IsHoverScrollBar(Instance.Id)
-			and V.X <= MouseX and MouseX <= V.X + Instance.W and V.Y <= MouseY and MouseY <= V.Y + V.H
-			and InRegion
-			then
-			Instance.HotItem = V
+	instance.hot_item = nil
+	local in_region = Region.contains(mouse_x, mouse_y)
+	mouse_x, mouse_y = Region.inverse_transform(instance.id, mouse_x, mouse_y)
+	for k, v in pairs(instance.items) do
+		if
+			not is_obstructed and not Region.is_hover_scroll_bar(instance.id) and v.x <= mouse_x and mouse_x <= v.x + instance.w and
+				v.y <= mouse_y and
+				mouse_y <= v.y + v.h and
+				in_region
+		 then
+			instance.hot_item = v
 		end
 
-		if Instance.HotItem == V or V.Selected then
-			DrawCommands.Rectangle('fill', V.X, V.Y, Instance.W, V.H, Style.TextHoverBgColor)
+		if instance.hot_item == v or v.selected then
+			DrawCommands.rectangle("fill", v.x, v.y, instance.w, v.h, Style.TextHoverBgColor)
 		end
 	end
 
-	LayoutManager.Begin('Ignore', {Ignore = true})
+	LayoutManager.begin("ignore", {ignore = true})
 end
 
-function ListBox.BeginItem(Id, Options)
-	Options = Options == nil and {} or Options
-	Options.Selected = Options.Selected == nil and false or Options.Selected
+function ListBox.begin_item(id, options)
+	options = options == nil and {} or options
+	options.selected = options.selected == nil and false or options.selected
 
-	assert(ActiveInstance ~= nil, "Trying to call BeginListBoxItem outside of BeginListBox.")
-	assert(ActiveInstance.ActiveItem == nil, 
-		"BeginListBoxItem was called for item '" .. (ActiveInstance.ActiveItem ~= nil and ActiveInstance.ActiveItem.Id or "nil") .. 
-			"' without a call to EndListBoxItem.")
-	local Item = GetItemInstance(ActiveInstance, Id)
-	Item.X = ActiveInstance.X
-	Item.Y = Cursor.GetY()
-	Cursor.SetX(Item.X)
-	Cursor.AdvanceX(0.0)
-	ActiveInstance.ActiveItem = Item
-	ActiveInstance.ActiveItem.Selected = Options.Selected
+	assert(active_instance ~= nil, "Trying to call begin_list_box_item outside of begin_list_box.")
+	assert(
+		active_instance.active_item == nil,
+		"begin_list_box_item was called for item '" ..
+			(active_instance.active_item ~= nil and active_instance.active_item.id or "nil") ..
+				"' without a call to end_list_box_item."
+	)
+	local item = get_item_instance(active_instance, id)
+	item.x = active_instance.x
+	item.y = Cursor.get_y()
+	Cursor.set_x(item.x)
+	Cursor.advance_x(0.0)
+	active_instance.active_item = item
+	active_instance.active_item.selected = options.selected
 end
 
-function ListBox.IsItemClicked(Button, IsDoubleClick)
-	assert(ActiveInstance ~= nil, "Trying to call IsItemClicked outside of BeginListBox.")
-	assert(ActiveInstance.ActiveItem ~= nil, "IsItemClicked was called outside of BeginListBoxItem.")
-	if ActiveInstance.HotItem == ActiveInstance.ActiveItem then
-		Button = Button == nil and 1 or Button
+function ListBox.is_item_clicked(button, IsDoubleClick)
+	assert(active_instance ~= nil, "Trying to call is_item_clicked outside of begin_list_box.")
+	assert(active_instance.active_item ~= nil, "is_item_clicked was called outside of begin_list_box_item.")
+	if active_instance.hot_item == active_instance.active_item then
+		button = button == nil and 1 or button
 		if IsDoubleClick then
-			return Mouse.IsDoubleClicked(Button)
+			return Mouse.is_double_clicked(button)
 		else
-			return Mouse.IsClicked(Button)
+			return Mouse.is_clicked(button)
 		end
 	end
 	return false
 end
 
-function ListBox.EndItem()
-	assert(ActiveInstance ~= nil, "Trying to call BeginListBoxItem outside of BeginListBox.")
-	assert(ActiveInstance.ActiveItem ~= nil, "Trying to call EndListBoxItem without calling BeginListBoxItem.")
-	local ItemX, ItemY, ItemW, ItemH = Cursor.GetItemBounds()
-	ActiveInstance.ActiveItem.W = ItemW
-	ActiveInstance.ActiveItem.H = Cursor.GetLineHeight()
-	Cursor.SetY(ActiveInstance.ActiveItem.Y + ActiveInstance.ActiveItem.H)
-	Cursor.AdvanceY(0.0)
-	ActiveInstance.ActiveItem = nil
+function ListBox.end_item()
+	assert(active_instance ~= nil, "Trying to call begin_list_box_item outside of begin_list_box.")
+	assert(active_instance.active_item ~= nil, "Trying to call end_list_box_item without calling begin_list_box_item.")
+	local item_x, item_y, item_w, item_h = Cursor.get_item_bounds()
+	active_instance.active_item.w = item_w
+	active_instance.active_item.h = Cursor.get_line_height()
+	Cursor.set_y(active_instance.active_item.y + active_instance.active_item.h)
+	Cursor.advance_y(0.0)
+	active_instance.active_item = nil
 end
 
-function ListBox.End()
-	assert(ActiveInstance ~= nil, "EndListBox was called without calling BeginListBox.")
-	Region.End()
-	Region.ApplyScissor()
+function ListBox.finish()
+	assert(active_instance ~= nil, "end_list_box was called without calling begin_list_box.")
+	Region.finish()
+	Region.apply_scissor()
 
-	Cursor.SetItemBounds(ActiveInstance.X, ActiveInstance.Y, ActiveInstance.W, ActiveInstance.H)
-	Cursor.SetPosition(ActiveInstance.X, ActiveInstance.Y)
-	Cursor.AdvanceY(ActiveInstance.H)
+	Cursor.set_item_bounds(active_instance.x, active_instance.y, active_instance.w, active_instance.h)
+	Cursor.set_position(active_instance.x, active_instance.y)
+	Cursor.advance_y(active_instance.h)
 
-	LayoutManager.End()
+	LayoutManager.finish()
 
-	Stats.End(ActiveInstance.StatHandle)
+	Stats.finish(active_instance.stat_handle)
 
-	ActiveInstance = nil
+	active_instance = nil
 end
 
 return ListBox

@@ -1,602 +1,596 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local max = math.max
 local min = math.min
 local floor = math.floor
 
-local DrawCommands = require(SLAB_PATH .. ".Internal.Core.DrawCommands")
-local MenuState = require(SLAB_PATH .. ".Internal.UI.MenuState")
-local Mouse = require(SLAB_PATH .. ".Internal.Input.Mouse")
-local Style = require(SLAB_PATH .. ".Style")
-local Utility = require(SLAB_PATH .. ".Internal.Core.Utility")
+local DrawCommands = required("DrawCommands")
+local MenuState = required("MenuState")
+local Mouse = required("Mouse")
+local Style = required("Style")
+local Utility = required("Utility")
 
 local Region = {}
-local Instances = {}
-local Stack = {}
-local ActiveInstance = nil
-local ScrollPad = 3.0
-local ScrollBarSize = 10.0
-local WheelX = 0.0
-local WheelY = 0.0
-local WheelSpeed = 3.0
-local HotInstance = nil
-local WheelInstance = nil
-local ScrollInstance = nil
 
-local function GetXScrollSize(Instance)
-	if Instance ~= nil then
-		return max(Instance.W - (Instance.ContentW - Instance.W), 10.0)
+local instances = {}
+local stack = {}
+local active_instance = nil
+local scroll_pad = 3.0
+local scroll_bar_size = 10.0
+local wheel_x = 0.0
+local wheel_y = 0.0
+local wheel_speed = 3.0
+local hot_instance = nil
+local wheel_instance = nil
+local scroll_instance = nil
+
+local function get_x_scroll_size(instance)
+	if instance ~= nil then
+		return max(instance.w - (instance.content_w - instance.w), 10.0)
 	end
 	return 0.0
 end
 
-local function GetYScrollSize(Instance)
-	if Instance ~= nil then
-		return max(Instance.H - (Instance.ContentH - Instance.H), 10.0)
+local function get_y_scroll_size(instance)
+	if instance ~= nil then
+		return max(instance.h - (instance.content_h - instance.h), 10.0)
 	end
 	return 0.0
 end
 
-local function IsScrollHovered(Instance, X, Y)
-	local HasScrollX, HasScrollY = false, false
+local function is_scroll_hovered(instance, x, y)
+	local has_scroll_x, has_scroll_y = false, false
 
-	if Instance ~= nil then
-		if Instance.HasScrollX then
-			local PosY = Instance.Y + Instance.H - ScrollPad - ScrollBarSize
-			local SizeX = GetXScrollSize(Instance)
-			local PosX = Instance.ScrollPosX
-			HasScrollX = Instance.X + PosX <= X and X < Instance.X + PosX + SizeX and PosY <= Y and Y < PosY + ScrollBarSize
+	if instance ~= nil then
+		if instance.has_scroll_x then
+			local pos_y = instance.y + instance.h - scroll_pad - scroll_bar_size
+			local size_x = get_x_scroll_size(instance)
+			local pos_x = instance.scroll_pos_x
+			has_scroll_x =
+				instance.x + pos_x <= x and x < instance.x + pos_x + size_x and pos_y <= y and y < pos_y + scroll_bar_size
 		end
 
-		if Instance.HasScrollY then
-			local PosX = Instance.X + Instance.W - ScrollPad - ScrollBarSize
-			local SizeY = GetYScrollSize(Instance)
-			local PosY = Instance.ScrollPosY
-			HasScrollY = PosX <= X and X < PosX + ScrollBarSize and Instance.Y + PosY <= Y and Y < Instance.Y + PosY + SizeY
+		if instance.has_scroll_y then
+			local pos_x = instance.x + instance.w - scroll_pad - scroll_bar_size
+			local size_y = get_y_scroll_size(instance)
+			local pos_y = instance.scroll_pos_y
+			has_scroll_y =
+				pos_x <= x and x < pos_x + scroll_bar_size and instance.y + pos_y <= y and y < instance.y + pos_y + size_y
 		end
 	end
-	return HasScrollX, HasScrollY
+	return has_scroll_x, has_scroll_y
 end
 
-local function Contains(Instance, X, Y)
-	if Instance ~= nil then
-		return Instance.X <= X and X <= Instance.X + Instance.W and Instance.Y <= Y and Y <= Instance.Y + Instance.H
+local function contains(instance, x, y)
+	if instance ~= nil then
+		return instance.x <= x and x <= instance.x + instance.w and instance.y <= y and y <= instance.y + instance.h
 	end
 	return false
 end
 
-local function UpdateScrollBars(Instance, IsObstructed)
-	if Instance.IgnoreScroll then
+local function update_scroll_bars(instance, is_obstructed)
+	if instance.ignore_scroll then
 		return
 	end
 
-	Instance.HasScrollX = Instance.ContentW > Instance.W
-	Instance.HasScrollY = Instance.ContentH > Instance.H
+	instance.has_scroll_x = instance.content_w > instance.w
+	instance.has_scroll_y = instance.content_h > instance.h
 
-	local X, Y = Instance.MouseX, Instance.MouseY
-	Instance.HoverScrollX, Instance.HoverScrollY = IsScrollHovered(Instance, X, Y)
-	local XSize = Instance.W - GetXScrollSize(Instance)
-	local YSize = Instance.H - GetYScrollSize(Instance)
+	local x, y = instance.mouse_x, instance.mouse_y
+	instance.hover_scroll_x, instance.hover_scroll_y = is_scroll_hovered(instance, x, y)
+	local x_size = instance.w - get_x_scroll_size(instance)
+	local y_size = instance.h - get_y_scroll_size(instance)
 
-	if IsObstructed then
-		Instance.HoverScrollX = false
-		Instance.HoverScrollY = false
+	if is_obstructed then
+		instance.hover_scroll_x = false
+		instance.hover_scroll_y = false
 	end
 
-	local IsMouseReleased = Mouse.IsReleased(1)
-	local IsMouseClicked = Mouse.IsClicked(1)
+	local is_mouse_released = Mouse.is_released(1)
+	local is_mouse_clicked = Mouse.is_clicked(1)
 
-	local DeltaX, DeltaY = Mouse.GetDelta()
+	local delta_x, delta_y = Mouse.get_delta()
 
-	if WheelInstance == Instance then
-		Instance.HoverScrollX = WheelX ~= 0.0
-		Instance.HoverScrollY = WheelY ~= 0.0
+	if wheel_instance == instance then
+		instance.hover_scroll_x = wheel_x ~= 0.0
+		instance.hover_scroll_y = wheel_y ~= 0.0
 	end
 
-	if not IsObstructed and Contains(Instance, X, Y) or (Instance.HoverScrollX or Instance.HoverScrollY) then
-		if WheelInstance == Instance then
-			if WheelX ~= 0.0 then
-				Instance.ScrollPosX = max(Instance.ScrollPosX + WheelX, 0.0)
-				Instance.IsScrollingX = true
-				IsMouseReleased = true
-				WheelX = 0.0
+	if not is_obstructed and contains(instance, x, y) or (instance.hover_scroll_x or instance.hover_scroll_y) then
+		if wheel_instance == instance then
+			if wheel_x ~= 0.0 then
+				instance.scroll_pos_x = max(instance.scroll_pos_x + wheel_x, 0.0)
+				instance.is_scrolling_x = true
+				is_mouse_released = true
+				wheel_x = 0.0
 			end
 
-			if WheelY ~= 0.0 then
-				Instance.ScrollPosY = max(Instance.ScrollPosY - WheelY, 0.0)
-				Instance.IsScrollingY = true
-				IsMouseReleased = true
-				WheelY = 0.0
+			if wheel_y ~= 0.0 then
+				instance.scroll_pos_y = max(instance.scroll_pos_y - wheel_y, 0.0)
+				instance.is_scrolling_y = true
+				is_mouse_released = true
+				wheel_y = 0.0
 			end
 
-			WheelInstance = nil
-			ScrollInstance = Instance
+			wheel_instance = nil
+			scroll_instance = instance
 		end
 
-		if ScrollInstance == nil and IsMouseClicked and (Instance.HoverScrollX or Instance.HoverScrollY) then
-			ScrollInstance = Instance
-			ScrollInstance.IsScrollingX = Instance.HoverScrollX
-			ScrollInstance.IsScrollingY = Instance.HoverScrollY
+		if scroll_instance == nil and is_mouse_clicked and (instance.hover_scroll_x or instance.hover_scroll_y) then
+			scroll_instance = instance
+			scroll_instance.is_scrolling_x = instance.hover_scroll_x
+			scroll_instance.is_scrolling_y = instance.hover_scroll_y
 		end
 	end
 
-	if ScrollInstance == Instance and IsMouseReleased then
-		Instance.IsScrollingX = false
-		Instance.IsScrollingY = false
-		ScrollInstance = nil
+	if scroll_instance == instance and is_mouse_released then
+		instance.is_scrolling_x = false
+		instance.is_scrolling_y = false
+		scroll_instance = nil
 	end
 
-	if Instance.HasScrollX then
-		if Instance.HasScrollY then
-			XSize = XSize - ScrollBarSize - ScrollPad
+	if instance.has_scroll_x then
+		if instance.has_scroll_y then
+			x_size = x_size - scroll_bar_size - scroll_pad
 		end
-		XSize = max(XSize, 0.0)
-		if ScrollInstance == Instance then
-			MenuState.RequestClose = false
+		x_size = max(x_size, 0.0)
+		if scroll_instance == instance then
+			MenuState.request_close = false
 
-			if Instance.IsScrollingX then
-				Instance.ScrollPosX = max(Instance.ScrollPosX + DeltaX, 0.0)
+			if instance.is_scrolling_x then
+				instance.scroll_pos_x = max(instance.scroll_pos_x + delta_x, 0.0)
 			end
 		end
-		Instance.ScrollPosX = min(Instance.ScrollPosX, XSize)
+		instance.scroll_pos_x = min(instance.scroll_pos_x, x_size)
 	end
 
-	if Instance.HasScrollY then
-		if Instance.HasScrollX then
-			YSize = YSize - ScrollBarSize - ScrollPad
+	if instance.has_scroll_y then
+		if instance.has_scroll_x then
+			y_size = y_size - scroll_bar_size - scroll_pad
 		end
-		YSize = max(YSize, 0.0)
-		if ScrollInstance == Instance then
-			MenuState.RequestClose = false
+		y_size = max(y_size, 0.0)
+		if scroll_instance == instance then
+			MenuState.request_close = false
 
-			if Instance.IsScrollingY then
-				Instance.ScrollPosY = max(Instance.ScrollPosY + DeltaY, 0.0)
+			if instance.is_scrolling_y then
+				instance.scroll_pos_y = max(instance.scroll_pos_y + delta_y, 0.0)
 			end
 		end
-		Instance.ScrollPosY = min(Instance.ScrollPosY, YSize)
+		instance.scroll_pos_y = min(instance.scroll_pos_y, y_size)
 	end
 
-	local XRatio, YRatio = 0.0, 0.0
-	if XSize ~= 0.0 then
-		XRatio = max(Instance.ScrollPosX / XSize, 0.0)
+	local x_ratio, y_ratio = 0.0, 0.0
+	if x_size ~= 0.0 then
+		x_ratio = max(instance.scroll_pos_x / x_size, 0.0)
 	end
-	if YSize ~= 0.0 then
-		YRatio = max(Instance.ScrollPosY / YSize, 0.0)
+	if y_size ~= 0.0 then
+		y_ratio = max(instance.scroll_pos_y / y_size, 0.0)
 	end
 
-	local TX = max(Instance.ContentW - Instance.W, 0.0) * -XRatio
-	local TY = max(Instance.ContentH - Instance.H, 0.0) * -YRatio
-	Instance.Transform:setTransformation(floor(TX), floor(TY))
+	local t_x = max(instance.content_w - instance.w, 0.0) * -x_ratio
+	local t_y = max(instance.content_h - instance.h, 0.0) * -y_ratio
+	instance.transform:setTransformation(floor(t_x), floor(t_y))
 end
 
-local function DrawScrollBars(Instance)
-	if not Instance.HasScrollX and not Instance.HasScrollY then
+local function draw_scroll_bars(instance)
+	if not instance.has_scroll_x and not instance.has_scroll_y then
 		return
 	end
 
-	if HotInstance ~= Instance and ScrollInstance ~= Instance and not Utility.IsMobile() then
+	if hot_instance ~= instance and scroll_instance ~= instance and not Utility.is_mobile() then
 		local dt = love.timer.getDelta()
-		Instance.ScrollAlphaX = max(Instance.ScrollAlphaX - dt, 0.0)
-		Instance.ScrollAlphaY = max(Instance.ScrollAlphaY - dt, 0.0)
+		instance.scroll_alpha_x = max(instance.scroll_alpha_x - dt, 0.0)
+		instance.scroll_alpha_y = max(instance.scroll_alpha_y - dt, 0.0)
 	else
-		Instance.ScrollAlphaX = 1.0
-		Instance.ScrollAlphaY = 1.0
+		instance.scroll_alpha_x = 1.0
+		instance.scroll_alpha_y = 1.0
 	end
 
-	if Instance.HasScrollX then
-		local XSize = GetXScrollSize(Instance)
-		local Color = Utility.MakeColor(Style.ScrollBarColor)
-		if Instance.HoverScrollX or Instance.IsScrollingX then
-			Color = Utility.MakeColor(Style.ScrollBarHoveredColor)
+	if instance.has_scroll_x then
+		local x_size = get_x_scroll_size(instance)
+		local colour = Utility.make_color(Style.ScrollBarColor)
+		if instance.hover_scroll_x or instance.is_scrolling_x then
+			colour = Utility.make_color(Style.ScrollBarHoveredColor)
 		end
-		Color[4] = Instance.ScrollAlphaX
-		local XPos = Instance.ScrollPosX
-		DrawCommands.Rectangle('fill', Instance.X + XPos, Instance.Y + Instance.H - ScrollPad - ScrollBarSize, XSize, ScrollBarSize, Color, Style.ScrollBarRounding)
+		colour[4] = instance.scroll_alpha_x
+		local x_pos = instance.scroll_pos_x
+		DrawCommands.rectangle(
+			"fill",
+			instance.x + x_pos,
+			instance.y + instance.h - scroll_pad - scroll_bar_size,
+			x_size,
+			scroll_bar_size,
+			colour,
+			Style.ScrollBarRounding
+		)
 	end
 
-	if Instance.HasScrollY then
-		local YSize = GetYScrollSize(Instance)
-		local Color = Utility.MakeColor(Style.ScrollBarColor)
-		if Instance.HoverScrollY or Instance.IsScrollingY then
-			Color = Utility.MakeColor(Style.ScrollBarHoveredColor)
+	if instance.has_scroll_y then
+		local y_size = get_y_scroll_size(instance)
+		local colour = Utility.make_color(Style.ScrollBarColor)
+		if instance.hover_scroll_y or instance.is_scrolling_y then
+			colour = Utility.make_color(Style.ScrollBarHoveredColor)
 		end
-		Color[4] = Instance.ScrollAlphaY
-		local YPos = Instance.ScrollPosY
-		DrawCommands.Rectangle('fill', Instance.X + Instance.W - ScrollPad - ScrollBarSize, Instance.Y + YPos, ScrollBarSize, YSize, Color, Style.ScrollBarRounding)
+		colour[4] = instance.scroll_alpha_y
+		local y_pos = instance.scroll_pos_y
+		DrawCommands.rectangle(
+			"fill",
+			instance.x + instance.w - scroll_pad - scroll_bar_size,
+			instance.y + y_pos,
+			scroll_bar_size,
+			y_size,
+			colour,
+			Style.ScrollBarRounding
+		)
 	end
 end
 
-local function GetInstance(Id)
-	if Id == nil then
-		return ActiveInstance
+local function get_instance(id)
+	if id == nil then
+		return active_instance
 	end
 
-	if Instances[Id] == nil then
-		local Instance = {}
-		Instance.Id = Id
-		Instance.X = 0.0
-		Instance.Y = 0.0
-		Instance.W = 0.0
-		Instance.H = 0.0
-		Instance.SX = 0.0
-		Instance.SY = 0.0
-		Instance.ContentW = 0.0
-		Instance.ContentH = 0.0
-		Instance.HasScrollX = false
-		Instance.HasScrollY = false
-		Instance.HoverScrollX = false
-		Instance.HoverScrollY = false
-		Instance.IsScrollingX = false
-		Instance.IsScrollingY = false
-		Instance.ScrollPosX = 0.0
-		Instance.ScrollPosY = 0.0
-		Instance.ScrollAlphaX = 0.0
-		Instance.ScrollAlphaY = 0.0
-		Instance.Intersect = false
-		Instance.AutoSizeContent = false
-		Instance.Transform = love.math.newTransform()
-		Instance.Transform:reset()
-		Instances[Id] = Instance
+	if instances[id] == nil then
+		local instance = {}
+		instance.id = id
+		instance.x = 0.0
+		instance.y = 0.0
+		instance.w = 0.0
+		instance.h = 0.0
+		instance.s_x = 0.0
+		instance.s_y = 0.0
+		instance.content_w = 0.0
+		instance.content_h = 0.0
+		instance.has_scroll_x = false
+		instance.has_scroll_y = false
+		instance.hover_scroll_x = false
+		instance.hover_scroll_y = false
+		instance.is_scrolling_x = false
+		instance.is_scrolling_y = false
+		instance.scroll_pos_x = 0.0
+		instance.scroll_pos_y = 0.0
+		instance.scroll_alpha_x = 0.0
+		instance.scroll_alpha_y = 0.0
+		instance.intersect = false
+		instance.auto_size_content = false
+		instance.transform = love.math.newTransform()
+		instance.transform:reset()
+		instances[id] = instance
 	end
-	return Instances[Id]
+	return instances[id]
 end
 
-function Region.Begin(Id, Options)
-	Options = Options == nil and {} or Options
-	Options.X = Options.X == nil and 0.0 or Options.X
-	Options.Y = Options.Y == nil and 0.0 or Options.Y
-	Options.W = Options.W == nil and 0.0 or Options.W
-	Options.H = Options.H == nil and 0.0 or Options.H
-	Options.SX = Options.SX == nil and Options.X or Options.SX
-	Options.SY = Options.SY == nil and Options.Y or Options.SY
-	Options.ContentW = Options.ContentW == nil and 0.0 or Options.ContentW
-	Options.ContentH = Options.ContentH == nil and 0.0 or Options.ContentH
-	Options.AutoSizeContent = Options.AutoSizeContent == nil and false or Options.AutoSizeContent
-	Options.BgColor = Options.BgColor == nil and Style.WindowBackgroundColor or Options.BgColor
-	Options.NoOutline = Options.NoOutline == nil and false or Options.NoOutline
-	Options.NoBackground = Options.NoBackground == nil and false or Options.NoBackground
-	Options.IsObstructed = Options.IsObstructed == nil and false or Options.IsObstructed
-	Options.Intersect = Options.Intersect == nil and false or Options.Intersect
-	Options.IgnoreScroll = Options.IgnoreScroll == nil and false or Options.IgnoreScroll
-	Options.MouseX = Options.MouseX == nil and 0.0 or Options.MouseX
-	Options.MouseY = Options.MouseY == nil and 0.0 or Options.MouseY
-	Options.ResetContent = Options.ResetContent == nil and false or Options.ResetContent
-	Options.Rounding = Options.Rounding == nil and 0.0 or Options.Rounding
+function Region.begin(id, options)
+	options = options == nil and {} or options
+	options.x = options.x == nil and 0.0 or options.x
+	options.y = options.y == nil and 0.0 or options.y
+	options.w = options.w == nil and 0.0 or options.w
+	options.h = options.h == nil and 0.0 or options.h
+	options.s_x = options.s_x == nil and options.x or options.s_x
+	options.s_y = options.s_y == nil and options.y or options.s_y
+	options.content_w = options.content_w == nil and 0.0 or options.content_w
+	options.content_h = options.content_h == nil and 0.0 or options.content_h
+	options.auto_size_content = options.auto_size_content == nil and false or options.auto_size_content
+	options.bg_color = options.bg_color == nil and Style.WindowBackgroundColor or options.bg_color
+	options.no_outline = options.no_outline == nil and false or options.no_outline
+	options.no_background = options.no_background == nil and false or options.no_background
+	options.is_obstructed = options.is_obstructed == nil and false or options.is_obstructed
+	options.intersect = options.intersect == nil and false or options.intersect
+	options.ignore_scroll = options.ignore_scroll == nil and false or options.ignore_scroll
+	options.mouse_x = options.mouse_x == nil and 0.0 or options.mouse_x
+	options.mouse_y = options.mouse_y == nil and 0.0 or options.mouse_y
+	options.reset_content = options.reset_content == nil and false or options.reset_content
+	options.rounding = options.rounding == nil and 0.0 or options.rounding
 
-	local Instance = GetInstance(Id)
-	Instance.X = Options.X
-	Instance.Y = Options.Y
-	Instance.W = Options.W
-	Instance.H = Options.H
-	Instance.SX = Options.SX
-	Instance.SY = Options.SY
-	Instance.Intersect = Options.Intersect
-	Instance.IgnoreScroll = Options.IgnoreScroll
-	Instance.MouseX = Options.MouseX
-	Instance.MouseY = Options.MouseY
-	Instance.AutoSizeContent = Options.AutoSizeContent
+	local instance = get_instance(id)
+	instance.x = options.x
+	instance.y = options.y
+	instance.w = options.w
+	instance.h = options.h
+	instance.s_x = options.s_x
+	instance.s_y = options.s_y
+	instance.intersect = options.intersect
+	instance.ignore_scroll = options.ignore_scroll
+	instance.mouse_x = options.mouse_x
+	instance.mouse_y = options.mouse_y
+	instance.auto_size_content = options.auto_size_content
 
-	if Options.ResetContent then
-		Instance.ContentW = 0.0
-		Instance.ContentH = 0.0
+	if options.reset_content then
+		instance.content_w = 0.0
+		instance.content_h = 0.0
 	end
 
-	if not Options.AutoSizeContent then
-		Instance.ContentW = Options.ContentW
-		Instance.ContentH = Options.ContentH
+	if not options.auto_size_content then
+		instance.content_w = options.content_w
+		instance.content_h = options.content_h
 	end
 
-	ActiveInstance = Instance
-	table.insert(Stack, 1, ActiveInstance)
+	active_instance = instance
+	table.insert(stack, 1, active_instance)
 
-	UpdateScrollBars(Instance, Options.IsObstructed)
+	update_scroll_bars(instance, options.is_obstructed)
 
-	if Options.AutoSizeContent then
-		Instance.ContentH = 0.0
-		Instance.ContentW = 0.0
+	if options.auto_size_content then
+		instance.content_h = 0.0
+		instance.content_w = 0.0
 	end
 
-	if HotInstance == Instance and (not Contains(Instance, Instance.MouseX, Instance.MouseY) or Options.IsObstructed) then
-		HotInstance = nil
+	if hot_instance == instance and (not contains(instance, instance.mouse_x, instance.mouse_y) or options.is_obstructed) then
+		hot_instance = nil
 	end
 
-	if not Options.IsObstructed then
-		if Contains(Instance, Instance.MouseX, Instance.MouseY) or (Instance.HoverScrollX or Instance.HoverScrollY) then
-			if ScrollInstance == nil then
-				HotInstance = Instance
+	if not options.is_obstructed then
+		if contains(instance, instance.mouse_x, instance.mouse_y) or (instance.hover_scroll_x or instance.hover_scroll_y) then
+			if scroll_instance == nil then
+				hot_instance = instance
 			else
-				HotInstance = ScrollInstance
+				hot_instance = scroll_instance
 			end
 		end
 	end
 
-	if not Options.NoBackground then
-		DrawCommands.Rectangle('fill', Instance.X, Instance.Y, Instance.W, Instance.H, Options.BgColor, Options.Rounding)
+	if not options.no_background then
+		DrawCommands.rectangle("fill", instance.x, instance.y, instance.w, instance.h, options.bg_color, options.rounding)
 	end
-	if not Options.NoOutline then
-		DrawCommands.Rectangle('line', Instance.X, Instance.Y, Instance.W, Instance.H, nil, Options.Rounding)
+	if not options.no_outline then
+		DrawCommands.rectangle("line", instance.x, instance.y, instance.w, instance.h, nil, options.rounding)
 	end
-	DrawCommands.TransformPush()
-	DrawCommands.ApplyTransform(Instance.Transform)
-	Region.ApplyScissor()
+	DrawCommands.transform_push()
+	DrawCommands.apply_transform(instance.transform)
+	Region.apply_scissor()
 end
 
-function Region.End()
-	DrawCommands.TransformPop()
-	DrawScrollBars(ActiveInstance)
+function Region.finish()
+	DrawCommands.transform_pop()
+	draw_scroll_bars(active_instance)
 
-	if HotInstance == ActiveInstance
-		and WheelInstance == nil 
-		and (WheelX ~= 0.0 or WheelY ~= 0.0)
-		and not ActiveInstance.IgnoreScroll then
-		WheelInstance = ActiveInstance
+	if
+		hot_instance == active_instance and wheel_instance == nil and (wheel_x ~= 0.0 or wheel_y ~= 0.0) and
+			not active_instance.ignore_scroll
+	 then
+		wheel_instance = active_instance
 	end
 
-	if ActiveInstance.Intersect then
-		DrawCommands.IntersectScissor()
+	if active_instance.intersect then
+		DrawCommands.intersect_scissor()
 	else
-		DrawCommands.Scissor()
+		DrawCommands.scissor()
 	end
 
-	ActiveInstance = nil
-	table.remove(Stack, 1)
+	active_instance = nil
+	table.remove(stack, 1)
 
-	if #Stack > 0 then
-		ActiveInstance = Stack[1]
+	if #stack > 0 then
+		active_instance = stack[1]
 	end
 end
 
-function Region.IsHoverScrollBar(Id)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		return Instance.HoverScrollX or Instance.HoverScrollY
+function Region.is_hover_scroll_bar(id)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		return instance.hover_scroll_x or instance.hover_scroll_y
 	end
 	return false
 end
 
-function Region.Translate(Id, X, Y)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		Instance.Transform:translate(X, Y)
-		local TX, TY = Instance.Transform:inverseTransformPoint(0, 0)
+function Region.translate(id, x, y)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		instance.transform:translate(x, y)
+		local t_x, t_y = instance.transform:inverseTransformPoint(0, 0)
 
-		if not Instance.IgnoreScroll then
-			if X ~= 0.0 and Instance.HasScrollX then
-				local XSize = Instance.W - GetXScrollSize(Instance)
-				local ContentW = Instance.ContentW - Instance.W
+		if not instance.ignore_scroll then
+			if x ~= 0.0 and instance.has_scroll_x then
+				local x_size = instance.w - get_x_scroll_size(instance)
+				local content_w = instance.content_w - instance.w
 
-				if Instance.HasScrollY then
-					XSize = XSize - ScrollPad - ScrollBarSize
+				if instance.has_scroll_y then
+					x_size = x_size - scroll_pad - scroll_bar_size
 				end
 
-				XSize = max(XSize, 0.0)
+				x_size = max(x_size, 0.0)
 
-				Instance.ScrollPosX = (TX / ContentW) * XSize
-				Instance.ScrollPosX = max(Instance.ScrollPosX, 0.0)
-				Instance.ScrollPosX = min(Instance.ScrollPosX, XSize)
+				instance.scroll_pos_x = (t_x / content_w) * x_size
+				instance.scroll_pos_x = max(instance.scroll_pos_x, 0.0)
+				instance.scroll_pos_x = min(instance.scroll_pos_x, x_size)
 			end
 
-			if Y ~= 0.0 and Instance.HasScrollY then
-				local YSize = Instance.H - GetYScrollSize(Instance)
+			if y ~= 0.0 and instance.has_scroll_y then
+				local y_size = instance.h - get_y_scroll_size(instance)
 
-				if Instance.HasScrollX then
-					YSize = YSize - ScrollPad - ScrollBarSize
+				if instance.has_scroll_x then
+					y_size = y_size - scroll_pad - scroll_bar_size
 				end
 
-				YSize = max(YSize, 0.0)
+				y_size = max(y_size, 0.0)
 
-				local ContentH = Instance.ContentH - Instance.H
+				local content_h = instance.content_h - instance.h
 
-				Instance.ScrollPosY = (TY / ContentH) * YSize
-				Instance.ScrollPosY = max(Instance.ScrollPosY, 0.0)
-				Instance.ScrollPosY = min(Instance.ScrollPosY, YSize)
+				instance.scroll_pos_y = (t_y / content_h) * y_size
+				instance.scroll_pos_y = max(instance.scroll_pos_y, 0.0)
+				instance.scroll_pos_y = min(instance.scroll_pos_y, y_size)
 			end
 		end
 	end
 end
 
-function Region.Transform(Id, X, Y)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		return Instance.Transform:transformPoint(X, Y)
+function Region.transform(id, x, y)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		return instance.transform:transformPoint(x, y)
 	end
-	return X, Y
+	return x, y
 end
 
-function Region.InverseTransform(Id, X, Y)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		return Instance.Transform:inverseTransformPoint(X, Y)
+function Region.inverse_transform(id, x, y)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		return instance.transform:inverseTransformPoint(x, y)
 	end
-	return X, Y
+	return x, y
 end
 
-function Region.ResetTransform(Id)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		Instance.Transform:reset()
-		Instance.ScrollPosX = 0.0
-		Instance.ScrollPosY = 0.0
+function Region.reset_transform(id)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		instance.transform:reset()
+		instance.scroll_pos_x = 0.0
+		instance.scroll_pos_y = 0.0
 	end
 end
 
-function Region.IsActive(Id)
-	if ActiveInstance ~= nil then
-		return ActiveInstance.Id == Id
+function Region.is_active(id)
+	if active_instance ~= nil then
+		return active_instance.id == id
 	end
 	return false
 end
 
-function Region.AddItem(X, Y, W, H)
-	if ActiveInstance ~= nil and ActiveInstance.AutoSizeContent then
-		local NewW = X + W - ActiveInstance.X
-		local NewH = Y + H - ActiveInstance.Y
-		ActiveInstance.ContentW = max(ActiveInstance.ContentW, NewW)
-		ActiveInstance.ContentH = max(ActiveInstance.ContentH, NewH)
+function Region.add_item(x, y, w, h)
+	if active_instance ~= nil and active_instance.auto_size_content then
+		local new_w = x + w - active_instance.x
+		local new_h = y + h - active_instance.y
+		active_instance.content_w = max(active_instance.content_w, new_w)
+		active_instance.content_h = max(active_instance.content_h, new_h)
 	end
 end
 
-function Region.ApplyScissor()
-	if ActiveInstance ~= nil then
-		if ActiveInstance.Intersect then
-			DrawCommands.IntersectScissor(ActiveInstance.SX, ActiveInstance.SY, ActiveInstance.W, ActiveInstance.H)
+function Region.apply_scissor()
+	if active_instance ~= nil then
+		if active_instance.intersect then
+			DrawCommands.intersect_scissor(active_instance.s_x, active_instance.s_y, active_instance.w, active_instance.h)
 		else
-			DrawCommands.Scissor(ActiveInstance.SX, ActiveInstance.SY, ActiveInstance.W, ActiveInstance.H)
+			DrawCommands.scissor(active_instance.s_x, active_instance.s_y, active_instance.w, active_instance.h)
 		end
 	end
 end
 
-function Region.GetBounds()
-	if ActiveInstance ~= nil then
-		return ActiveInstance.X, ActiveInstance.Y, ActiveInstance.W, ActiveInstance.H
+function Region.get_bounds()
+	if active_instance ~= nil then
+		return active_instance.x, active_instance.y, active_instance.w, active_instance.h
 	end
 	return 0.0, 0.0, 0.0, 0.0
 end
 
-function Region.GetContentSize()
-	if ActiveInstance ~= nil then
-		return ActiveInstance.ContentW, ActiveInstance.ContentH
+function Region.get_content_size()
+	if active_instance ~= nil then
+		return active_instance.content_w, active_instance.content_h
 	end
 	return 0.0, 0.0
 end
 
-function Region.Contains(X, Y)
-	if ActiveInstance ~= nil then
-		return ActiveInstance.X <= X and X <= ActiveInstance.X + ActiveInstance.W and ActiveInstance.Y <= Y and Y <= ActiveInstance.Y + ActiveInstance.H
+function Region.contains(x, y)
+	if active_instance ~= nil then
+		return active_instance.x <= x and x <= active_instance.x + active_instance.w and active_instance.y <= y and
+			y <= active_instance.y + active_instance.h
 	end
 	return false
 end
 
-function Region.ResetContentSize(Id)
-	local Instance = GetInstance(Id)
-	if Instance ~= nil then
-		Instance.ContentW = 0.0
-		Instance.ContentH = 0.0
+function Region.reset_content_size(id)
+	local instance = get_instance(id)
+	if instance ~= nil then
+		instance.content_w = 0.0
+		instance.content_h = 0.0
 	end
 end
 
-function Region.GetScrollPad()
-	return ScrollPad
+function Region.get_scroll_pad()
+	return scroll_pad
 end
 
-function Region.GetScrollBarSize()
-	return ScrollBarSize
+function Region.get_scroll_bar_size()
+	return scroll_bar_size
 end
 
-function Region.WheelMoved(X, Y)
-	WheelX = X * WheelSpeed
-	WheelY = Y * WheelSpeed
+function Region.wheel_moved(x, y)
+	wheel_x = x * wheel_speed
+	wheel_y = y * wheel_speed
 end
 
-function Region.GetWheelDelta()
-	return WheelX, WheelY
+function Region.get_wheel_delta()
+	return wheel_x, wheel_y
 end
 
-function Region.IsScrolling(Id)
-	if Id ~= nil then
-		local Instance = GetInstance(Id)
-		return ScrollInstance == Instance or WheelInstance == Instance
+function Region.is_scrolling(id)
+	if id ~= nil then
+		local instance = get_instance(id)
+		return scroll_instance == instance or wheel_instance == instance
 	end
 
-	return ScrollInstance ~= nil or WheelInstance ~= nil
+	return scroll_instance ~= nil or wheel_instance ~= nil
 end
 
-function Region.GetHotInstanceId()
-	if HotInstance ~= nil then
-		return HotInstance.Id
+function Region.get_hot_instance_id()
+	if hot_instance ~= nil then
+		return hot_instance.id
 	end
 
-	return ''
+	return ""
 end
 
-function Region.ClearHotInstance(Id)
-	if HotInstance ~= nil then
-		if Id ~= nil then
-			if HotInstance.Id == Id then
-				HotInstance = nil
+function Region.clear_hot_instance(id)
+	if hot_instance ~= nil then
+		if id ~= nil then
+			if hot_instance.id == id then
+				hot_instance = nil
 			end
 		else
-			HotInstance = nil
+			hot_instance = nil
 		end
 	end
 end
 
-function Region.GetInstanceIds()
-	local Result = {}
+function Region.get_instance_ids()
+	local result = {}
 
-	for K, V in pairs(Instances) do
-		table.insert(Result, K)
+	for k, v in pairs(instances) do
+		table.insert(result, k)
 	end
 
-	return Result
+	return result
 end
 
-function Region.GetDebugInfo(Id)
-	local Result = {}
-	local Instance = nil
+function Region.get_debug_info(id)
+	local result = {}
+	local instance = nil
 
-	for K, V in pairs(Instances) do
-		if K == Id then
-			Instance = V
+	for k, v in pairs(instances) do
+		if k == id then
+			instance = v
 			break
 		end
 	end
 
-	table.insert(Result, "ScrollInstance: " .. (ScrollInstance ~= nil and ScrollInstance.Id or "nil"))
-	table.insert(Result, "WheelInstance: " .. (WheelInstance ~= nil and WheelInstance.Id or "nil"))
-	table.insert(Result, "WheelX: " .. WheelX)
-	table.insert(Result, "WheelY: " .. WheelY)
-	table.insert(Result, "Wheel Speed: " .. WheelSpeed)
+	table.insert(result, "scroll_instance: " .. (scroll_instance ~= nil and scroll_instance.id or "nil"))
+	table.insert(result, "wheel_instance: " .. (wheel_instance ~= nil and wheel_instance.id or "nil"))
+	table.insert(result, "wheel_x: " .. wheel_x)
+	table.insert(result, "wheel_y: " .. wheel_y)
+	table.insert(result, "Wheel speed: " .. wheel_speed)
 
-	if Instance ~= nil then
-		table.insert(Result, "Id: " .. Instance.Id)
-		table.insert(Result, "W: " .. Instance.W)
-		table.insert(Result, "H: " .. Instance.H)
-		table.insert(Result, "ContentW: " .. Instance.ContentW)
-		table.insert(Result, "ContentH: " .. Instance.ContentH)
-		table.insert(Result, "ScrollPosX: " .. Instance.ScrollPosX)
-		table.insert(Result, "ScrollPosY: " .. Instance.ScrollPosY)
+	if instance ~= nil then
+		table.insert(result, "id: " .. instance.id)
+		table.insert(result, "w: " .. instance.w)
+		table.insert(result, "h: " .. instance.h)
+		table.insert(result, "content_w: " .. instance.content_w)
+		table.insert(result, "content_h: " .. instance.content_h)
+		table.insert(result, "scroll_pos_x: " .. instance.scroll_pos_x)
+		table.insert(result, "scroll_pos_y: " .. instance.scroll_pos_y)
 
-		local TX, TY = Instance.Transform:transformPoint(0, 0)
-		table.insert(Result, "TX: " .. TX)
-		table.insert(Result, "TY: " .. TY)
-		table.insert(Result, "Max TX: " .. Instance.ContentW - Instance.W)
-		table.insert(Result, "Max TY: " .. Instance.ContentH - Instance.H)
+		local t_x, t_y = instance.transform:transformPoint(0, 0)
+		table.insert(result, "t_x: " .. t_x)
+		table.insert(result, "t_y: " .. t_y)
+		table.insert(result, "max_val t_x: " .. instance.content_w - instance.w)
+		table.insert(result, "max_val t_y: " .. instance.content_h - instance.h)
 	end
 
-	return Result
+	return result
 end
 
-function Region.SetWheelSpeed(Speed)
-	WheelSpeed = Speed == nil and 3.0 or Speed
+function Region.set_wheel_speed(speed)
+	wheel_speed = speed == nil and 3.0 or speed
 end
 
-function Region.GetWheelSpeed()
-	return WheelSpeed
+function Region.get_wheel_speed()
+	return wheel_speed
 end
 
 return Region

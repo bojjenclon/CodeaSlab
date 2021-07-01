@@ -1,146 +1,122 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Style = require(SLAB_PATH .. '.Style')
-local Tooltip = require(SLAB_PATH .. '.Internal.UI.Tooltip')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Stats = required("Stats")
+local Style = required("Style")
+local tooltip = required("tooltip")
+local Window = required("Window")
 
 local Image = {}
-local Instances = {}
-local ImageCache = {}
 
-local function GetImage(Path)
-	if ImageCache[Path] == nil then
-		ImageCache[Path] = love.graphics.newImage(Path)
-		local WrapH, WrapV = ImageCache[Path]:getWrap()
+local instances = {}
+local image_cache = {}
+
+local function get_image(path)
+	if image_cache[path] == nil then
+		image_cache[path] = love.graphics.newImage(path)
+		local wrap_h, wrap_v = image_cache[path]:getWrap()
 	end
-	return ImageCache[Path]
+	return image_cache[path]
 end
 
-local function GetInstance(Id)
-	local Key = Window.GetId() .. '.' .. Id
-	if Instances[Key] == nil then
-		local Instance = {}
-		Instance.Id = Id
-		Instance.Image = nil
-		Instances[Key] = Instance
+local function get_instance(id)
+	local key = Window.get_id() .. "." .. id
+	if instances[key] == nil then
+		local instance = {}
+		instance.id = id
+		instance.img = nil
+		instances[key] = instance
 	end
-	return Instances[Key]
+	return instances[key]
 end
 
-function Image.Begin(Id, Options)
-	local StatHandle = Stats.Begin('Image', 'Slab')
+function Image.begin(id, options)
+	local stat_handle = Stats.begin("img", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Tooltip = Options.Tooltip == nil and "" or Options.Tooltip
-	Options.Rotation = Options.Rotation == nil and 0 or Options.Rotation
-	Options.Scale = Options.Scale == nil and 1 or Options.Scale
-	Options.ScaleX = Options.ScaleX == nil and Options.Scale or Options.ScaleX
-	Options.ScaleY = Options.ScaleY == nil and Options.Scale or Options.ScaleY
-	Options.Color = Options.Color == nil and {1.0, 1.0, 1.0, 1.0} or Options.Color
-	Options.SubX = Options.SubX == nil and 0.0 or Options.SubX
-	Options.SubY = Options.SubY == nil and 0.0 or Options.SubY
-	Options.SubW = Options.SubW == nil and 0.0 or Options.SubW
-	Options.SubH = Options.SubH == nil and 0.0 or Options.SubH
-	Options.WrapH = Options.WrapH == nil and "clamp" or Options.WrapH
-	Options.WrapV = Options.WrapV == nil and "clamp" or Options.WrapV
+	options = options == nil and {} or options
+	options.tooltip = options.tooltip == nil and "" or options.tooltip
+	options.rotation = options.rotation == nil and 0 or options.rotation
+	options.scale = options.scale == nil and 1 or options.scale
+	options.scale_x = options.scale_x == nil and options.scale or options.scale_x
+	options.scale_y = options.scale_y == nil and options.scale or options.scale_y
+	options.colour = options.colour == nil and {1.0, 1.0, 1.0, 1.0} or options.colour
+	options.sub_x = options.sub_x == nil and 0.0 or options.sub_x
+	options.sub_y = options.sub_y == nil and 0.0 or options.sub_y
+	options.sub_w = options.sub_w == nil and 0.0 or options.sub_w
+	options.sub_h = options.sub_h == nil and 0.0 or options.sub_h
+	options.wrap_h = options.wrap_h == nil and "clamp" or options.wrap_h
+	options.wrap_v = options.wrap_v == nil and "clamp" or options.wrap_v
 
-	local Instance = GetInstance(Id)
-	local WinItemId = Window.GetItemId(Id)
+	local instance = get_instance(id)
+	local win_item_id = Window.get_item_id(id)
 
-	if Instance.Image == nil then
-		if Options.Image == nil then
-			assert(Options.Path ~= nil, "Path to an image is required if no image is set!")
-			Instance.Image = GetImage(Options.Path)
+	if instance.img == nil then
+		if options.img == nil then
+			assert(options.path ~= nil, "path to an image is required if no image is set!")
+			instance.img = get_image(options.path)
 		else
-			Instance.Image = Options.Image
+			instance.img = options.img
 		end
 	end
 
-	Instance.Image:setWrap(Options.WrapH, Options.WrapV)
+	instance.img:setWrap(options.wrap_h, options.wrap_v)
 
-	local W = Instance.Image:getWidth() * Options.ScaleX
-	local H = Instance.Image:getHeight() * Options.ScaleY
+	local w = instance.img:getWidth() * options.scale_x
+	local h = instance.img:getHeight() * options.scale_y
 
-	local UseSubImage = false
-	if Options.SubW > 0.0 and Options.SubH > 0.0 then
-		W = Options.SubW * Options.ScaleX
-		H = Options.SubH * Options.ScaleY
-		UseSubImage = true
+	local use_sub_image = false
+	if options.sub_w > 0.0 and options.sub_h > 0.0 then
+		w = options.sub_w * options.scale_x
+		h = options.sub_h * options.scale_y
+		use_sub_image = true
 	end
 
-	LayoutManager.AddControl(W, H)
+	LayoutManager.add_control(w, h)
 
-	local X, Y = Cursor.GetPosition()
-	local MouseX, MouseY = Window.GetMousePosition()
+	local x, y = Cursor.get_position()
+	local mouse_x, mouse_y = Window.get_mouse_position()
 
-	if not Window.IsObstructedAtMouse() and X <= MouseX and MouseX <= X + W and Y <= MouseY and MouseY <= Y + H then
-		Tooltip.Begin(Options.Tooltip)
-		Window.SetHotItem(WinItemId)
+	if not Window.is_obstructed_at_mouse() and x <= mouse_x and mouse_x <= x + w and y <= mouse_y and mouse_y <= y + h then
+		Tooltip.begin(options.tooltip)
+		Window.set_hot_item(win_item_id)
 	end
 
-	if UseSubImage then
+	if use_sub_image then
 		DrawCommands.SubImage(
-			X,
-			Y,
-			Instance.Image,
-			Options.SubX,
-			Options.SubY,
-			Options.SubW,
-			Options.SubH,
-			Options.Rotation,
-			Options.ScaleX,
-			Options.ScaleY,
-			Options.Color)
+			x,
+			y,
+			instance.img,
+			options.sub_x,
+			options.sub_y,
+			options.sub_w,
+			options.sub_h,
+			options.rotation,
+			options.scale_x,
+			options.scale_y,
+			options.colour
+		)
 	else
-		DrawCommands.Image(X, Y, Instance.Image, Options.Rotation, Options.ScaleX, Options.ScaleY, Options.Color)
+		DrawCommands.image(x, y, instance.img, options.rotation, options.scale_x, options.scale_y, options.colour)
 	end
 
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(H)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(h)
 
-	Window.AddItem(X, Y, W, H, WinItemId)
+	Window.add_item(x, y, w, h, win_item_id)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 end
 
-function Image.GetSize(Image)
-	if Image ~= nil then
-		local Data = Image
-		if type(Image) == 'string' then
-			Data = GetImage(Image)
+function Image.get_size(img)
+	if img ~= nil then
+		local data = img
+		if type(img) == "string" then
+			data = get_image(img)
 		end
 
-		if Data ~= nil then
-			return Data:getWidth(), Data:getHeight()
+		if data ~= nil then
+			return data:getWidth(), data:getHeight()
 		end
 	end
 

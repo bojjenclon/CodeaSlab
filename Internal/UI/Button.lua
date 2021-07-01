@@ -1,216 +1,190 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local floor = math.floor
 local max = math.max
 
-local Cursor = require(SLAB_PATH .. '.Internal.Core.Cursor')
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local LayoutManager = require(SLAB_PATH .. '.Internal.UI.LayoutManager')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Stats = require(SLAB_PATH .. '.Internal.Core.Stats')
-local Style = require(SLAB_PATH .. '.Style')
-local Text = require(SLAB_PATH .. '.Internal.UI.Text')
-local Tooltip = require(SLAB_PATH .. '.Internal.UI.Tooltip')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
-local Window = require(SLAB_PATH .. '.Internal.UI.Window')
+local Cursor = required("Cursor")
+local DrawCommands = required("DrawCommands")
+local LayoutManager = required("LayoutManager")
+local Mouse = required("Mouse")
+local Stats = required("Stats")
+local Style = required("Style")
+local text = required("text")
+local tooltip = required("tooltip")
+local Utility = required("Utility")
+local Window = required("Window")
 
 local Button = {}
 
-local Pad = 10.0
-local MinWidth = 75.0
-local Radius = 8.0
-local ClickedId = nil
+local pad = 10.0
+local min_width = 75.0
+local radius = 8.0
+local clicked_id = nil
 
-function Button.Begin(Label, Options)
-	local StatHandle = Stats.Begin('Button', 'Slab')
+function Button.begin(label, options)
+	local stat_handle = Stats.begin("button", "Slab")
 
-	Options = Options == nil and {} or Options
-	Options.Tooltip = Options.Tooltip == nil and "" or Options.Tooltip
-	Options.Rounding = Options.Rounding == nil and Style.ButtonRounding or Options.Rounding
-	Options.Invisible = Options.Invisible == nil and false or Options.Invisible
-	Options.W = Options.W == nil and nil or Options.W
-	Options.H = Options.H == nil and nil or Options.H
-	Options.Disabled = Options.Disabled == nil and false or Options.Disabled
+	options = options == nil and {} or options
+	options.tooltip = options.tooltip == nil and "" or options.tooltip
+	options.rounding = options.rounding == nil and Style.button_rounding or options.rounding
+	options.invisible = options.invisible == nil and false or options.invisible
+	options.w = options.w == nil and nil or options.w
+	options.h = options.h == nil and nil or options.h
+	options.disabled = options.disabled == nil and false or options.disabled
 
-	local Id = Window.GetItemId(Label)
-	local W, H = Button.GetSize(Label)
-	local LabelW = Style.Font:getWidth(Label)
+	local id = Window.get_item_id(label)
+	local w, h = Button.get_size(label)
+	local label_w = Style.Font:getWidth(label)
 	local FontHeight = Style.Font:getHeight()
-	local TextColor = Options.Disabled and Style.ButtonDisabledTextColor or nil
+	local text_color = options.disabled and Style.ButtonDisabledTextColor or nil
 
-	if Options.W ~= nil then
-		W = Options.W
+	if options.w ~= nil then
+		w = options.w
 	end
 
-	if Options.H ~= nil then
-		H = Options.H
+	if options.h ~= nil then
+		h = options.h
 	end
 
-	W, H = LayoutManager.ComputeSize(W, H)
-	LayoutManager.AddControl(W, H)
+	w, h = LayoutManager.compute_size(w, h)
+	LayoutManager.add_control(w, h)
 
-	local X, Y = Cursor.GetPosition()
+	local x, y = Cursor.get_position()
 
-	local Result = false
-	local Color = Style.ButtonColor
+	local result = false
+	local colour = Style.ButtonColor
 
-	local MouseX, MouseY = Window.GetMousePosition()
-	if not Window.IsObstructedAtMouse() and X <= MouseX and MouseX <= X + W and Y <= MouseY and MouseY <= Y + H then
-		Tooltip.Begin(Options.Tooltip)
-		Window.SetHotItem(Id)
+	local mouse_x, mouse_y = Window.get_mouse_position()
+	if not Window.is_obstructed_at_mouse() and x <= mouse_x and mouse_x <= x + w and y <= mouse_y and mouse_y <= y + h then
+		Tooltip.begin(options.tooltip)
+		Window.set_hot_item(id)
 
-		if not Options.Disabled then
-			if not Utility.IsMobile() then
-				Color = Style.ButtonHoveredColor
+		if not options.disabled then
+			if not Utility.is_mobile() then
+				colour = Style.ButtonHoveredColor
 			end
 
-			if ClickedId == Id then
-				Color = Style.ButtonPressedColor
+			if clicked_id == id then
+				colour = Style.ButtonPressedColor
 			end
 
-			if Mouse.IsClicked(1) then
-				ClickedId = Id
+			if Mouse.is_clicked(1) then
+				clicked_id = id
 			end
 
-			if Mouse.IsReleased(1) and ClickedId == Id then
-				Result = true
-				ClickedId = nil
+			if Mouse.is_released(1) and clicked_id == id then
+				result = true
+				clicked_id = nil
 			end
 		end
 	end
 
-	local LabelX = X + (W * 0.5) - (LabelW * 0.5)
+	local label_x = x + (w * 0.5) - (label_w * 0.5)
 
-	if not Options.Invisible then
-		DrawCommands.Rectangle('fill', X, Y, W, H, Color, Options.Rounding)
-		local X, Y = Cursor.GetPosition()
-		Cursor.SetX(floor(LabelX))
-		Cursor.SetY(floor(Y + (H * 0.5) - (FontHeight * 0.5)))
-		LayoutManager.Begin('Ignore', {Ignore = true})
-		Text.Begin(Label, {Color = TextColor})
-		LayoutManager.End()
-		Cursor.SetPosition(X, Y)
+	if not options.invisible then
+		DrawCommands.rectangle("fill", x, y, w, h, colour, options.rounding)
+		local x, y = Cursor.get_position()
+		Cursor.set_x(floor(label_x))
+		Cursor.set_y(floor(y + (h * 0.5) - (FontHeight * 0.5)))
+		LayoutManager.begin("ignore", {ignore = true})
+		Text.begin(label, {colour = text_color})
+		LayoutManager.finish()
+		Cursor.set_position(x, y)
 	end
 
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(H)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(h)
 
-	Window.AddItem(X, Y, W, H, Id)
+	Window.add_item(x, y, w, h, id)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 
-	return Result
+	return result
 end
 
-function Button.BeginRadio(Label, Options)
-	local StatHandle = Stats.Begin('RadioButton', 'Slab')
+function Button.begin_radio(label, options)
+	local stat_handle = Stats.begin("radio_button", "Slab")
 
-	Label = Label == nil and "" or Label
+	label = label == nil and "" or label
 
-	Options = Options == nil and {} or Options
-	Options.Index = Options.Index == nil and 0 or Options.Index
-	Options.SelectedIndex = Options.SelectedIndex == nil and 0 or Options.SelectedIndex
-	Options.Tooltip = Options.Tooltip == nil and "" or Options.Tooltip
+	options = options == nil and {} or options
+	options.index = options.index == nil and 0 or options.index
+	options.selected_index = options.selected_index == nil and 0 or options.selected_index
+	options.tooltip = options.tooltip == nil and "" or options.tooltip
 
-	local Result = false
-	local Id = Window.GetItemId(Label)
-	local W, H = Radius * 2.0, Radius * 2.0
-	local IsObstructed = Window.IsObstructedAtMouse()
-	local Color = Style.ButtonColor
-	local MouseX, MouseY = Window.GetMousePosition()
+	local result = false
+	local id = Window.get_item_id(label)
+	local w, h = radius * 2.0, radius * 2.0
+	local is_obstructed = Window.is_obstructed_at_mouse()
+	local colour = Style.ButtonColor
+	local mouse_x, mouse_y = Window.get_mouse_position()
 
-	if Label ~= "" then
-		local TextW, TextH = Text.GetSize(Label)
-		W = W + Cursor.PadX() + TextW
-		H = max(H, TextH)
+	if label ~= "" then
+		local text_w, text_h = Text.get_size(label)
+		w = w + Cursor.pad_x() + text_w
+		h = max(h, text_h)
 	end
 
-	LayoutManager.AddControl(W, H)
+	LayoutManager.add_control(w, h)
 
-	local X, Y = Cursor.GetPosition()
-	local CenterX, CenterY = X + Radius, Y + Radius
-	local DX = MouseX - CenterX
-	local DY = MouseY - CenterY
-	local HoveredButton = not IsObstructed and (DX * DX) + (DY * DY) <= Radius * Radius
-	if HoveredButton then
-		Color = Style.ButtonHoveredColor
+	local x, y = Cursor.get_position()
+	local center_x, center_y = x + radius, y + radius
+	local d_x = mouse_x - center_x
+	local d_y = mouse_y - center_y
+	local hovered_button = not is_obstructed and (d_x * d_x) + (d_y * d_y) <= radius * radius
+	if hovered_button then
+		colour = Style.ButtonHoveredColor
 
-		if ClickedId == Id then
-			Color = Style.ButtonPressedColor
+		if clicked_id == id then
+			colour = Style.ButtonPressedColor
 		end
 
-		if Mouse.IsClicked(1) then
-			ClickedId = Id
+		if Mouse.is_clicked(1) then
+			clicked_id = id
 		end
 
-		if Mouse.IsReleased(1) and ClickedId == Id then
-			Result = true
-			ClickedId = nil
+		if Mouse.is_released(1) and clicked_id == id then
+			result = true
+			clicked_id = nil
 		end
 	end
 
-	DrawCommands.Circle('fill', CenterX, CenterY, Radius, Color)
+	DrawCommands.circle("fill", center_x, center_y, radius, colour)
 
-	if Options.Index > 0 and Options.Index == Options.SelectedIndex then
-		DrawCommands.Circle('fill', CenterX, CenterY, Radius * 0.7, Style.RadioButtonSelectedColor)
+	if options.index > 0 and options.index == options.selected_index then
+		DrawCommands.circle("fill", center_x, center_y, radius * 0.7, Style.RadioButtonSelectedColor)
 	end
 
-	if Label ~= "" then
-		local CursorY = Cursor.GetY()
-		Cursor.AdvanceX(Radius * 2.0)
-		LayoutManager.Begin('Ignore', {Ignore = true})
-		Text.Begin(Label)
-		LayoutManager.End()
-		Cursor.SetY(CursorY)
+	if label ~= "" then
+		local cursor_y = Cursor.get_y()
+		Cursor.advance_x(radius * 2.0)
+		LayoutManager.begin("ignore", {ignore = true})
+		Text.begin(label)
+		LayoutManager.finish()
+		Cursor.set_y(cursor_y)
 	end
 
-	if not IsObstructed and X <= MouseX and MouseX <= X + W and Y <= MouseY and MouseY <= Y + H then
-		Tooltip.Begin(Options.Tooltip)
-		Window.SetHotItem(Id)
+	if not is_obstructed and x <= mouse_x and mouse_x <= x + w and y <= mouse_y and mouse_y <= y + h then
+		Tooltip.begin(options.tooltip)
+		Window.set_hot_item(id)
 	end
 
-	Cursor.SetItemBounds(X, Y, W, H)
-	Cursor.AdvanceY(H)
+	Cursor.set_item_bounds(x, y, w, h)
+	Cursor.advance_y(h)
 
-	Window.AddItem(X, Y, W, H)
+	Window.add_item(x, y, w, h)
 
-	Stats.End(StatHandle)
+	Stats.finish(stat_handle)
 
-	return Result
+	return result
 end
 
-function Button.GetSize(Label)
-	local W = Style.Font:getWidth(Label)
-	local H = Style.Font:getHeight()
-	return max(W, MinWidth) + Pad * 2.0, H + Pad * 0.5
+function Button.get_size(label)
+	local w = Style.Font:getWidth(label)
+	local h = Style.Font:getHeight()
+	return max(w, min_width) + pad * 2.0, h + pad * 0.5
 end
 
-function Button.ClearClicked()
-	ClickedId = nil
+function Button.clear_clicked()
+	clicked_id = nil
 end
 
-return Button
+return button

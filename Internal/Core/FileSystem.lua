@@ -1,43 +1,17 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local FileSystem = {}
 
-local Bit = require('bit')
-local FFI = require('ffi')
+local Bit = require("bit")
+local FFI = require("ffi")
 
-local function ShouldFilter(Name, Filter)
-	Filter = Filter == nil and "*.*" or Filter
+local function ShouldFilter(name, filter)
+	filter = filter == nil and "*.*" or filter
 
-	local Extension = FileSystem.GetExtension(Name)
+	local extension = FileSystem.get_extension(name)
 
-	if Filter ~= "*.*" then
-		local FilterExt = FileSystem.GetExtension(Filter)
+	if filter ~= "*.*" then
+		local FilterExt = FileSystem.get_extension(filter)
 
-		if Extension ~= FilterExt then
+		if extension ~= FilterExt then
 			return true
 		end
 	end
@@ -45,9 +19,9 @@ local function ShouldFilter(Name, Filter)
 	return false
 end
 
-local GetDirectoryItems = nil
-local Exists = nil
-local IsDirectory = nil
+local get_directory_items = nil
+local exists = nil
+local is_directory = nil
 
 --[[
 	The following code is based on the following sources:
@@ -63,9 +37,8 @@ local IsDirectory = nil
 	portable filesystem API for LuaJIT / Linux & OSX backend
 	Written by Cosmin Apreutesei. Public Domain.
 --]]
-
 if FFI.os == "Windows" then
-	FFI.cdef[[
+	FFI.cdef [[
 		#pragma pack(push)
 		#pragma pack(1)
 		struct WIN32_FIND_DATAW {
@@ -86,7 +59,7 @@ if FFI.os == "Windows" then
 		void* FindFirstFileW(const wchar_t* pattern, struct WIN32_FIND_DATAW* fd);
 		bool FindNextFileW(void* ff, struct WIN32_FIND_DATAW* fd);
 		bool FindClose(void* ff);
-		DWORD GetFileAttributesW(const wchar_t* Path);
+		DWORD GetFileAttributesW(const wchar_t* path);
 		
 		int MultiByteToWideChar(unsigned int CodePage, uint32_t dwFlags, const char* lpMultiByteStr,
 			int cbMultiByte, const wchar_t* lpWideCharStr, int cchWideChar);
@@ -95,8 +68,8 @@ if FFI.os == "Windows" then
 			const char* default, int* used);
 	]]
 
-	local WIN32_FIND_DATA = FFI.typeof('struct WIN32_FIND_DATAW')
-	local INVALID_HANDLE = FFI.cast('void*', -1)
+	local WIN32_FIND_DATA = FFI.typeof("struct WIN32_FIND_DATAW")
+	local INVALID_HANDLE = FFI.cast("void*", -1)
 
 	local function u2w(str, code)
 		local size = FFI.C.MultiByteToWideChar(code or 65001, 0, str, #str, nil, 0)
@@ -112,45 +85,44 @@ if FFI.os == "Windows" then
 		return FFI.string(buf)
 	end
 
-	GetDirectoryItems = function(Directory, Options)
-		local Result = {}
+	get_directory_items = function(directory, options)
+		local result = {}
 
 		local FindData = FFI.new(WIN32_FIND_DATA)
-		local Handle = FFI.C.FindFirstFileW(u2w(Directory .. "\\*"), FindData)
-		FFI.gc(Handle, FFI.C.FindClose)
+		local handle = FFI.C.FindFirstFileW(u2w(directory .. "\\*"), FindData)
+		FFI.gc(handle, FFI.C.FindClose)
 
-		if Handle ~= nil then
+		if handle ~= nil then
 			repeat
-				local Name = w2u(FindData.cFileName)
+				local name = w2u(FindData.cFileName)
 
-				if Name ~= "." and Name ~= ".." then
-					local AddDirectory = (FindData.dwFileAttributes == 16 or FindData.dwFileAttributes == 17) and Options.Directories
-					local AddFile = FindData.dwFileAttributes == 32 and Options.Files
-					
-					if (AddDirectory or AddFile) and not ShouldFilter(Name, Options.Filter) then
-						table.insert(Result, Name)
+				if name ~= "." and name ~= ".." then
+					local AddDirectory = (FindData.dwFileAttributes == 16 or FindData.dwFileAttributes == 17) and options.directories
+					local AddFile = FindData.dwFileAttributes == 32 and options.files
+
+					if (AddDirectory or AddFile) and not ShouldFilter(name, options.filter) then
+						table.insert(result, name)
 					end
 				end
-
-			until not FFI.C.FindNextFileW(Handle, FindData)
+			until not FFI.C.FindNextFileW(handle, FindData)
 		end
 
-		FFI.C.FindClose(FFI.gc(Handle, nil))
+		FFI.C.FindClose(FFI.gc(handle, nil))
 
-		return Result
+		return result
 	end
 
-	Exists = function(Path)
-		local Attributes = FFI.C.GetFileAttributesW(u2w(Path))
+	exists = function(path)
+		local Attributes = FFI.C.GetFileAttributesW(u2w(path))
 		return Attributes ~= FFI.C.INVALID_FILE_ATTRIBUTES
 	end
 
-	IsDirectory = function(Path)
-		local Attributes = FFI.C.GetFileAttributesW(u2w(Path))
+	is_directory = function(path)
+		local Attributes = FFI.C.GetFileAttributesW(u2w(path))
 		return Attributes ~= FFI.C.INVALID_FILE_ATTRIBUTES and Bit.band(Attributes, FFI.C.FILE_ATTRIBUTE_DIRECTORY) ~= 0
 	end
 else
-	FFI.cdef[[
+	FFI.cdef [[
 		typedef struct DIR DIR;
 		typedef size_t time_t;
 		static const int S_IFREG = 0x8000;
@@ -161,7 +133,7 @@ else
 	]]
 
 	if FFI.os == "OSX" then
-		FFI.cdef[[
+		FFI.cdef [[
 			struct dirent {
 				uint64_t	d_ino;
 				uint64_t	d_off;
@@ -200,7 +172,7 @@ else
 			int stat64(const char* path, struct stat* buf);
 		]]
 	else
-		FFI.cdef[[
+		FFI.cdef [[
 			struct dirent {
 				uint64_t		d_ino;
 				int64_t			d_off;
@@ -235,25 +207,25 @@ else
 		]]
 	end
 
-	local Stat = FFI.typeof('struct stat');
+	local Stat = FFI.typeof("struct stat")
 
-	GetDirectoryItems = function(Directory, Options)
-		local Result = {}
+	get_directory_items = function(directory, options)
+		local result = {}
 
-		local DIR = FFI.C.opendir(Directory)
+		local DIR = FFI.C.opendir(directory)
 
 		if DIR ~= nil then
 			local Entry = FFI.C.readdir(DIR)
 
 			while Entry ~= nil do
-				local Name = FFI.string(Entry.d_name)
+				local name = FFI.string(Entry.d_name)
 
-				if Name ~= "." and Name ~= ".." and string.sub(Name, 1, 1) ~= "." then
-					local AddDirectory = Entry.d_type == 4 and Options.Directories
-					local AddFile = Entry.d_type == 8 and Options.Files
+				if name ~= "." and name ~= ".." and string.sub(name, 1, 1) ~= "." then
+					local AddDirectory = Entry.d_type == 4 and options.directories
+					local AddFile = Entry.d_type == 8 and options.files
 
-					if (AddDirectory or AddFile) and not ShouldFilter(Name, Options.Filter) then
-						table.insert(Result, Name)
+					if (AddDirectory or AddFile) and not ShouldFilter(name, options.filter) then
+						table.insert(result, name)
 					end
 				end
 
@@ -263,18 +235,18 @@ else
 			FFI.C.closedir(DIR)
 		end
 
-		return Result
+		return result
 	end
 
-	Exists = function(Path)
+	exists = function(path)
 		local Buffer = Stat()
-		return FFI.C.stat64(Path, Buffer) == 0
+		return FFI.C.stat64(path, Buffer) == 0
 	end
 
-	IsDirectory = function(Path)
+	is_directory = function(path)
 		local Buffer = Stat()
 
-		if FFI.C.stat64(Path, Buffer) == 0 then
+		if FFI.C.stat64(path, Buffer) == 0 then
 			return Bit.band(Buffer.st_mode, 0xf000) == FFI.C.S_IFDIR
 		end
 
@@ -282,51 +254,51 @@ else
 	end
 end
 
-function FileSystem.Separator()
+function FileSystem.separator()
 	-- Lua/Love2D returns all paths with back slashes.
 	return "/"
 end
 
-function FileSystem.GetDirectoryItems(Directory, Options)
-	Options = Options == nil and {} or Options
-	Options.Files = Options.Files == nil and true or Options.Files
-	Options.Directories = Options.Directories == nil and true or Options.Directories
-	Options.Filter = Options.Filter == nil and "*.*" or Options.Filter
+function FileSystem.get_directory_items(directory, options)
+	options = options == nil and {} or options
+	options.files = options.files == nil and true or options.files
+	options.directories = options.directories == nil and true or options.directories
+	options.filter = options.filter == nil and "*.*" or options.filter
 
-	if string.sub(Directory, #Directory, #Directory) ~= FileSystem.Separator() then
-		Directory = Directory .. FileSystem.Separator()
+	if string.sub(directory, #directory, #directory) ~= FileSystem.separator() then
+		directory = directory .. FileSystem.separator()
 	end
 
-	local Result = GetDirectoryItems(Directory, Options)
+	local result = get_directory_items(directory, options)
 
-	table.sort(Result)
+	table.sort(result)
 
-	return Result
+	return result
 end
 
-function FileSystem.Exists(Path)
-	return Exists(Path)
+function FileSystem.exists(path)
+	return exists(path)
 end
 
-function FileSystem.IsDirectory(Path)
-	return IsDirectory(Path)
+function FileSystem.is_directory(path)
+	return is_directory(path)
 end
 
-function FileSystem.Parent(Path)
-	local Result = Path
+function FileSystem.Parent(path)
+	local result = path
 
-	local Index = 1
-	local I = Index
+	local index = 1
+	local i = index
 	repeat
-		Index = I
-		I = string.find(Path, FileSystem.Separator(), Index + 1, true)
-	until I == nil
+		index = i
+		i = string.find(path, FileSystem.separator(), index + 1, true)
+	until i == nil
 
-	if Index > 1 then
-		Result = string.sub(Path, 1, Index - 1)
+	if index > 1 then
+		result = string.sub(path, 1, index - 1)
 	end
 
-	return Result
+	return result
 end
 
 --[[
@@ -335,20 +307,20 @@ end
 	Determines if the given path is an absolute path or a relative path. This is determined by checking if the
 	path starts with a drive letter on Windows, or the Unix root character '/'.
 
-	Path: [String] The path to check.
+	path: [String] The path to check.
 
-	Return: [Boolean] True if the path is absolute, false if it is relative.
+	rtn: [Boolean] True if the path is absolute, false if it is relative.
 --]]
-function FileSystem.IsAbsolute(Path)
-	if Path == nil or Path == "" then
+function FileSystem.IsAbsolute(path)
+	if path == nil or path == "" then
 		return false
 	end
 
 	if FFI.os == "Windows" then
-		return string.match(Path, "(.:-)\\") ~= nil
+		return string.match(path, "(.:-)\\") ~= nil
 	end
 
-	return string.sub(Path, 1, 1) == FileSystem.Separator()
+	return string.sub(path, 1, 1) == FileSystem.separator()
 end
 
 --[[
@@ -357,167 +329,167 @@ end
 	Attempts to retrieve the drive letter from the given absolute path. This function is targeted for
 	paths on Windows. Unix style paths will just return the root '/'.
 
-	Path: [String] The absolute path containing the drive letter.
+	path: [String] The absolute path containing the drive letter.
 
-	Return: [String] The drive letter, colon, and path separator are returned. On Unix platforms, just the '/'
+	rtn: [String] The drive letter, colon, and path separator are returned. On Unix platforms, just the '/'
 		character is returned.
 --]]
-function FileSystem.GetDrive(Path)
-	if not FileSystem.IsAbsolute(Path) then
+function FileSystem.GetDrive(path)
+	if not FileSystem.IsAbsolute(path) then
 		return ""
 	end
 
 	if FFI.os == "Windows" then
-		local Result = string.match(Path, "(.:-)\\")
+		local result = string.match(path, "(.:-)\\")
 
-		if Result == nil then
-			Result = string.match(Path, "(.:-)" .. FileSystem.Separator())
+		if result == nil then
+			result = string.match(path, "(.:-)" .. FileSystem.separator())
 		end
 
-		if Result ~= nil then
-			return Result .. FileSystem.Separator()
+		if result ~= nil then
+			return result .. FileSystem.separator()
 		end
 	end
 
-	return FileSystem.Separator()
+	return FileSystem.separator()
 end
 
 --[[
-	Sanitize
+	sanitize
 
 	This function will attempt to remove any '.' or '..' components in the path and will appropriately modify
 	the result to represent changes to the path based on if a '..' component is found. This function will keep
 	the path's scope (relative/absolute) during sanitization.
 
-	Path: [String] The path to be sanitized.
+	path: [String] The path to be sanitized.
 
-	Return: [String] The sanitized path string.
+	rtn: [String] The sanitized path string.
 --]]
-function FileSystem.Sanitize(Path)
-	local Result = ""
+function FileSystem.sanitize(path)
+	local result = ""
 
-	local Items = {}
-	for Item in string.gmatch(Path, "([^" .. FileSystem.Separator() .. "]+)") do
+	local items = {}
+	for item in string.gmatch(path, "([^" .. FileSystem.separator() .. "]+)") do
 		-- Always add the first item. If the given path is relative, then this will help preserve that.
-		if #Items == 0 then
-			table.insert(Items, Item)
+		if #items == 0 then
+			table.insert(items, item)
 		else
 			-- If the parent directory item is found, pop the last item off of the stack.
-			if Item == ".." then
-				table.remove(Items, #Items)
-			-- Ignore same directory item and push the item to the stack.
-			elseif Item ~= "." then
-				table.insert(Items, Item)
+			if item == ".." then
+				-- ignore same directory item and push the item to the stack.
+				table.remove(items, #items)
+			elseif item ~= "." then
+				table.insert(items, item)
 			end
 		end
 	end
 
-	for I, Item in ipairs(Items) do
-		if Result == "" then
-			if Item == "." or Item == ".." then
-				Result = Item
+	for i, item in ipairs(items) do
+		if result == "" then
+			if item == "." or item == ".." then
+				result = item
 			else
-				if FileSystem.IsAbsolute(Path) then
-					Result = FileSystem.GetDrive(Path) .. Item
+				if FileSystem.IsAbsolute(path) then
+					result = FileSystem.GetDrive(path) .. item
 				else
-					Result = Item
+					result = item
 				end
 			end
 		else
-			Result = Result .. FileSystem.Separator() .. Item
+			result = result .. FileSystem.separator() .. item
 		end
 	end
 
-	return Result
+	return result
 end
 
-function FileSystem.GetBaseName(Path, RemoveExtension)
-	local Result = string.match(Path, "^.+/(.+)$")
+function FileSystem.get_base_name(path, RemoveExtension)
+	local result = string.match(path, "^.+/(.+)$")
 
-	if Result == nil then
-		Result = Path
+	if result == nil then
+		result = path
 	end
 
 	if RemoveExtension then
-		Result = FileSystem.RemoveExtension(Result)
+		result = FileSystem.RemoveExtension(result)
 	end
 
-	return Result
+	return result
 end
 
-function FileSystem.GetDirectory(Path)
-	local Result = string.match(Path, "(.+)/")
+function FileSystem.GetDirectory(path)
+	local result = string.match(path, "(.+)/")
 
-	if Result == nil then
-		Result = Path
+	if result == nil then
+		result = path
 	end
 
-	return Result
+	return result
 end
 
-function FileSystem.GetRootDirectory(Path)
-	local Result = Path
+function FileSystem.GetRootDirectory(path)
+	local result = path
 
-	local Index = string.find(Path, FileSystem.Separator(), 1, true)
+	local index = string.find(path, FileSystem.separator(), 1, true)
 
-	if Index ~= nil then
-		Result = string.sub(Path, 1, Index - 1)
+	if index ~= nil then
+		result = string.sub(path, 1, index - 1)
 	end
 
-	return Result
+	return result
 end
 
 function FileSystem.GetSlabPath()
-	local Path = love.filesystem.getSource()
-	if not FileSystem.IsDirectory(Path) then
-		Path = love.filesystem.getSourceBaseDirectory()
+	local path = love.filesystem.getSource()
+	if not FileSystem.is_directory(path) then
+		path = love.filesystem.getSourceBaseDirectory()
 	end
-	return Path .. "/Slab"
+	return path .. "/Slab"
 end
 
-function FileSystem.GetExtension(Path)
-	local Result = string.match(Path, "[^.]+$")
+function FileSystem.get_extension(path)
+	local result = string.match(path, "[^.]+$")
 
-	if Result == nil then
-		Result = ""
+	if result == nil then
+		result = ""
 	end
 
-	return Result
+	return result
 end
 
-function FileSystem.RemoveExtension(Path)
-	local Result = string.match(Path, "(.+)%.")
+function FileSystem.RemoveExtension(path)
+	local result = string.match(path, "(.+)%.")
 
-	if Result == nil then
-		Result = Path
+	if result == nil then
+		result = path
 	end
 
-	return Result
+	return result
 end
 
-function FileSystem.ReadContents(Path, IsBinary)
-	local Result = nil
+function FileSystem.ReadContents(path, IsBinary)
+	local result = nil
 
-	local Mode = IsBinary and "rb" or "r"
-	local Handle, Error = io.open(Path, Mode)
-	if Handle ~= nil then
-		Result = Handle:read("*a")
-		Handle:close()
+	local mode = IsBinary and "rb" or "r"
+	local handle, err = io.open(path, mode)
+	if handle ~= nil then
+		result = handle:read("*a")
+		handle:close()
 	end
 
-	return Result, Error
+	return result, err
 end
 
-function FileSystem.SaveContents(Path, Contents)
-	local Result = false
-	local Handle, Error = io.open(Path, "w")
-	if Handle ~= nil then
-		Handle:write(Contents)
-		Handle:close()
-		Result = true
+function FileSystem.SaveContents(path, Contents)
+	local result = false
+	local handle, err = io.open(path, "w")
+	if handle ~= nil then
+		handle:write(Contents)
+		handle:close()
+		result = true
 	end
 
-	return Result, Error
+	return result, err
 end
 
 return FileSystem

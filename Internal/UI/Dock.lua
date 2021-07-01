@@ -1,244 +1,217 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
-local DrawCommands = require(SLAB_PATH .. '.Internal.Core.DrawCommands')
-local MenuState = require(SLAB_PATH .. '.Internal.UI.MenuState')
-local Mouse = require(SLAB_PATH .. '.Internal.Input.Mouse')
-local Style = require(SLAB_PATH .. '.Style')
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
+local DrawCommands = required("DrawCommands")
+local MenuState = required("MenuState")
+local Mouse = required("Mouse")
+local Style = required("Style")
+local Utility = required("Utility")
 
 local Dock = {}
 
-local Instances = {}
-local Pending = nil
-local PendingWindow = nil
+local instances = {}
+local pending = nil
+local pending_window = nil
 
-local function IsValid(Id)
-	if Id == nil then
+local function is_valid(id)
+	if id == nil then
 		return false
 	end
 
-	if type(Id) ~= 'string' then
+	if type(id) ~= "string" then
 		return false
 	end
 
-	return Id == 'Left' or Id == 'Bottom' or Id == 'Right'
+	return id == "Left" or id == "Bottom" or id == "Right"
 end
 
-local function GetInstance(Id)
-	if Instances[Id] == nil then
-		local Instance = {}
-		Instance.Id = Id
-		Instance.Window = nil
-		Instance.Reset = false
-		Instance.TearX = 0
-		Instance.TearY = 0
-		Instance.IsTearing = false
-		Instance.Torn = false
-		Instance.CachedOptions = nil
-		Instance.Enabled = true
-		Instance.NoSavedSettings = false
-		Instances[Id] = Instance
+local function get_instance(id)
+	if instances[id] == nil then
+		local instance = {}
+		instance.id = id
+		instance.window = nil
+		instance.reset = false
+		instance.tear_x = 0
+		instance.tear_y = 0
+		instance.is_tearing = false
+		instance.torn = false
+		instance.cached_options = nil
+		instance.enabled = true
+		instance.no_saved_settings = false
+		instances[id] = instance
 	end
-	return Instances[Id]
+	return instances[id]
 end
 
-local function GetOverlayBounds(Type)
-	local X, Y, W, H = 0, 0, 0, 0
-	local ViewW, ViewH = love.graphics.getWidth(), love.graphics.getHeight()
-	local Offset = 75
+local function get_overlay_bounds(t)
+	local x, y, w, h = 0, 0, 0, 0
+	local view_w, view_h = WIDTH, HEIGHT
+	local offset = 75
 
-	if Type == 'Left' then
-		W = 100
-		H = 150
-		X = Offset
-		Y = ViewH * 0.5 - H * 0.5
-	elseif Type == 'Right' then
-		W = 100
-		H = 150
-		X = ViewW - Offset - W
-		Y = ViewH * 0.5 - H * 0.5
-	elseif Type == 'Bottom' then
-		W = ViewW * 0.55
-		H = 100
-		X = ViewW * 0.5 - W * 0.5
-		Y = ViewH - Offset - H
+	if t == "Left" then
+		w = 100
+		h = 150
+		x = offset
+		y = view_h * 0.5 - h * 0.5
+	elseif t == "Right" then
+		w = 100
+		h = 150
+		x = view_w - offset - w
+		y = view_h * 0.5 - h * 0.5
+	elseif t == "Bottom" then
+		w = view_w * 0.55
+		h = 100
+		x = view_w * 0.5 - w * 0.5
+		y = view_h - offset - h
 	end
 
-	return X, Y, W, H
+	return x, y, w, h
 end
 
-local function DrawOverlay(Type)
-	local Instance = GetInstance(Type)
-	if Instance ~= nil and Instance.Window ~= nil then
+local function draw_overlay(t)
+	local instance = get_instance(t)
+	if instance ~= nil and instance.window ~= nil then
 		return
 	end
 
-	if not Instance.Enabled then
+	if not instance.enabled then
 		return
 	end
 
-	local X, Y, W, H = GetOverlayBounds(Type)
-	local Color = {0.29, 0.59, 0.83, 0.65}
-	local TitleH = 14
-	local Spacing = 6
+	local x, y, w, h = get_overlay_bounds(t)
+	local colour = {0.29, 0.59, 0.83, 0.65}
+	local title_h = 14
+	local spacing = 6
 
-	local MouseX, MouseY = Mouse.Position()
-	if X <= MouseX and MouseX <= X + W and Y <= MouseY and MouseY <= Y + H then
-		Color = {0.50, 0.75, 0.96, 0.65}
-		Pending = Type
+	local mouse_x, mouse_y = Mouse.position()
+	if x <= mouse_x and mouse_x <= x + w and y <= mouse_y and mouse_y <= y + h then
+		colour = {0.50, 0.75, 0.96, 0.65}
+		pending = t
 	end
 
-	DrawCommands.Rectangle('fill', X, Y, W, TitleH, Color)
-	DrawCommands.Rectangle('line', X, Y, W, TitleH, {0, 0, 0, 1})
+	DrawCommands.rectangle("fill", x, y, w, title_h, colour)
+	DrawCommands.rectangle("line", x, y, w, title_h, {0, 0, 0, 1})
 
-	Y = Y + TitleH + Spacing
-	H = H - TitleH - Spacing
-	DrawCommands.Rectangle('fill', X, Y, W, H, Color)
-	DrawCommands.Rectangle('line', X, Y, W, H, {0, 0, 0, 1})
+	y = y + title_h + spacing
+	h = h - title_h - spacing
+	DrawCommands.rectangle("fill", x, y, w, h, colour)
+	DrawCommands.rectangle("line", x, y, w, h, {0, 0, 0, 1})
 end
 
-function Dock.DrawOverlay()
-	Pending = nil
+function Dock.draw_overlay()
+	pending = nil
 
-	DrawCommands.SetLayer('Dock')
-	DrawCommands.Begin()
+	DrawCommands.set_layer("Dock")
+	DrawCommands.begin()
 
-	DrawOverlay('Left')
-	DrawOverlay('Right')
-	DrawOverlay('Bottom')
+	draw_overlay("Left")
+	draw_overlay("Right")
+	draw_overlay("Bottom")
 
-	DrawCommands.End()
+	DrawCommands.finish()
 
-	if Mouse.IsReleased(1) then
-		for Id, Instance in pairs(Instances) do
-			Instance.IsTearing = false
+	if Mouse.is_released(1) then
+		for id, instance in pairs(instances) do
+			instance.is_tearing = false
 		end
 	end
 end
 
 function Dock.Commit()
-	if Pending ~= nil and PendingWindow ~= nil and Mouse.IsReleased(1) then
-		local Instance = GetInstance(Pending)
+	if pending ~= nil and pending_window ~= nil and Mouse.is_released(1) then
+		local instance = get_instance(pending)
 
-		if PendingWindow ~= nil then
-			Instance.Window = PendingWindow.Id
-			PendingWindow = nil
-			Instance.Reset = true
+		if pending_window ~= nil then
+			instance.window = pending_window.id
+			pending_window = nil
+			instance.reset = true
 		end
 
-		Pending = nil
+		pending = nil
 	end
 end
 
-function Dock.GetDock(WinId)
-	for K, V in pairs(Instances) do
-		if V.Window == WinId then
-			return K
+function Dock.GetDock(win_id)
+	for k, v in pairs(instances) do
+		if v.window == win_id then
+			return k
 		end
 	end
 
 	return nil
 end
 
-function Dock.GetBounds(Type)
-	local X, Y, W, H = 0, 0, 0, 0
-	local ViewW, ViewH = love.graphics.getWidth(), love.graphics.getHeight()
-	local MainMenuBarH = MenuState.MainMenuBarH
-	local TitleH = Style.Font:getHeight()
+function Dock.get_bounds(t)
+	local x, y, w, h = 0, 0, 0, 0
+	local view_w, view_h = WIDTH, HEIGHT
+	local main_menu_bar_h = MenuState.main_menu_bar_h
+	local title_h = Style.Font:getHeight()
 
-	if Type == 'Left' then
-		Y = MainMenuBarH
-		W = 150
-		H = ViewH - Y - TitleH
-	elseif Type == 'Right' then
-		X = ViewW - 150
-		Y = MainMenuBarH
-		W = 150
-		H = ViewH - Y - TitleH
-	elseif Type == 'Bottom' then
-		Y = ViewH - 150
-		W = ViewW
-		H = 150
+	if t == "Left" then
+		y = main_menu_bar_h
+		w = 150
+		h = view_h - y - title_h
+	elseif t == "Right" then
+		x = view_w - 150
+		y = main_menu_bar_h
+		w = 150
+		h = view_h - y - title_h
+	elseif t == "Bottom" then
+		y = view_h - 150
+		w = view_w
+		h = 150
 	end
 
-	return X, Y, W, H
+	return x, y, w, h
 end
 
-function Dock.AlterOptions(WinId, Options)
-	Options = Options == nil and {} or Options
+function Dock.alter_options(win_id, options)
+	options = options == nil and {} or options
 
-	for Id, Instance in pairs(Instances) do
-		if Instance.Window == WinId then
-
-			if Instance.Torn or not Instance.Enabled then
-				Instance.Window = nil
-				Utility.CopyValues(Options, Instance.CachedOptions)
-				Instance.CachedOptions = nil
-				Instance.Torn = false
-				Options.ResetSize = true
+	for id, instance in pairs(instances) do
+		if instance.window == win_id then
+			if instance.torn or not instance.enabled then
+				instance.window = nil
+				Utility.copy_values(options, instance.cached_options)
+				instance.cached_options = nil
+				instance.torn = false
+				options.reset_size = true
 			else
-				if Instance.Reset then
-					Instance.CachedOptions = {
-						X = Options.X,
-						Y = Options.Y,
-						W = Options.W,
-						H = Options.H,
-						AllowMove = Options.AllowMove,
-						Layer = Options.Layer,
-						SizerFilter = Utility.Copy(Options.SizerFilter),
-						AutoSizeWindow = Options.AutoSizeWindow,
-						AutoSizeWindowW = Options.AutoSizeWindowW,
-						AutoSizeWindowH = Options.AutoSizeWindowH,
-						AllowResize = Options.AllowResize
+				if instance.reset then
+					instance.cached_options = {
+						x = options.x,
+						y = options.y,
+						w = options.w,
+						h = options.h,
+						allow_move = options.allow_move,
+						layer = options.layer,
+						sizer_filter = Utility.copy(options.sizer_filter),
+						auto_size_window = options.auto_size_window,
+						auto_size_window_w = options.auto_size_window_w,
+						auto_size_window_h = options.auto_size_window_h,
+						allow_resize = options.allow_resize
 					}
 				end
 
-				Options.AllowMove = false
-				Options.Layer = 'Dock'
-				if Id == 'Left' then
-					Options.SizerFilter = {'E'}
-				elseif Id == 'Right' then
-					Options.SizerFilter = {'W'}
-				elseif Id == 'Bottom' then
-					Options.SizerFilter = {'N'}
+				options.allow_move = false
+				options.layer = "Dock"
+				if id == "Left" then
+					options.sizer_filter = {"E"}
+				elseif id == "Right" then
+					options.sizer_filter = {"w"}
+				elseif id == "Bottom" then
+					options.sizer_filter = {"N"}
 				end
 
-				local X, Y, W, H = Dock.GetBounds(Id)
-				Options.X = X
-				Options.Y = Y
-				Options.W = W
-				Options.H = H
-				Options.AutoSizeWindow = false
-				Options.AutoSizeWindowW = false
-				Options.AutoSizeWindowH = false
-				Options.AllowResize = true
-				Options.ResetPosition = Instance.Reset
-				Options.ResetSize = Instance.Reset
-				Instance.Reset = false
+				local x, y, w, h = Dock.get_bounds(id)
+				options.x = x
+				options.y = y
+				options.w = w
+				options.h = h
+				options.auto_size_window = false
+				options.auto_size_window_w = false
+				options.auto_size_window_h = false
+				options.allow_resize = true
+				options.reset_position = instance.reset
+				options.reset_size = instance.reset
+				instance.reset = false
 			end
 
 			break
@@ -246,109 +219,108 @@ function Dock.AlterOptions(WinId, Options)
 	end
 end
 
-function Dock.SetPendingWindow(Instance)
-	PendingWindow = Instance
+function Dock.set_pending_window(instance)
+	pending_window = instance
 end
 
-function Dock.GetPendingWindow()
-	return PendingWindow
+function Dock.get_pending_window()
+	return pending_window
 end
 
-function Dock.IsTethered(WinId)
-	for Id, Instance in pairs(Instances) do
-		if Instance.Window == WinId then
-			return not Instance.Torn
+function Dock.is_tethered(win_id)
+	for id, instance in pairs(instances) do
+		if instance.window == win_id then
+			return not instance.torn
 		end
 	end
 
 	return false
 end
 
-function Dock.BeginTear(WinId, X, Y)
-	for Id, Instance in pairs(Instances) do
-		if Instance.Window == WinId then
-			Instance.TearX = X
-			Instance.TearY = Y
-			Instance.IsTearing = true
+function Dock.begin_tear(win_id, x, y)
+	for id, instance in pairs(instances) do
+		if instance.window == win_id then
+			instance.tear_x = x
+			instance.tear_y = y
+			instance.is_tearing = true
 		end
 	end
 end
 
-function Dock.UpdateTear(WinId, X, Y)
-	for Id, Instance in pairs(Instances) do
-		if Instance.Window == WinId and Instance.IsTearing then
-			local Threshold = 25.0
-			local DistanceX = Instance.TearX - X
-			local DistanceY = Instance.TearY - Y
-			local DistanceSq = DistanceX * DistanceX + DistanceY * DistanceY
+function Dock.update_tear(win_id, x, y)
+	for id, instance in pairs(instances) do
+		if instance.window == win_id and instance.is_tearing then
+			local threshold = 25.0
+			local distance_x = instance.tear_x - x
+			local distance_y = instance.tear_y - y
+			local distance_sq = distance_x * distance_x + distance_y * distance_y
 
-			if DistanceSq >= Threshold * Threshold then
-				Instance.IsTearing = false
-				Instance.Torn = true
+			if distance_sq >= threshold * threshold then
+				instance.is_tearing = false
+				instance.torn = true
 			end
 		end
 	end
 end
 
-function Dock.GetCachedOptions(WinId)
-	for Id, Instance in pairs(Instances) do
-		if Instance.Window == WinId then
-			return Instance.CachedOptions
+function Dock.get_cached_options(win_id)
+	for id, instance in pairs(instances) do
+		if instance.window == win_id then
+			return instance.cached_options
 		end
 	end
 
 	return nil
 end
 
-function Dock.Toggle(List, Enabled)
-	List = List == nil and {} or List
-	Enabled = Enabled == nil and true or Enabled
+function Dock.toggle(list, enabled)
+	list = list == nil and {} or list
+	enabled = enabled == nil and true or enabled
 
-	if type(List) == 'string' then
-		List = {List}
+	if type(list) == "string" then
+		list = {list}
 	end
 
-	for I, V in ipairs(List) do
-		if IsValid(V) then
-			local Instance = GetInstance(V)
-			Instance.Enabled = Enabled
+	for i, v in ipairs(list) do
+		if is_valid(v) then
+			local instance = get_instance(v)
+			instance.enabled = enabled
 		end
 	end
 end
 
-function Dock.SetOptions(Type, Options)
-	Options = Options == nil and {} or Options
-	Options.NoSavedSettings = Options.NoSavedSettings == nil and false or Options.NoSavedSettings
+function Dock.set_options(t, options)
+	options = options == nil and {} or options
+	options.no_saved_settings = options.no_saved_settings == nil and false or options.no_saved_settings
 
-	if IsValid(Type) then
-		local Instance = GetInstance(Type)
-		Instance.NoSavedSettings = Options.NoSavedSettings
+	if is_valid(t) then
+		local instance = get_instance(t)
+		instance.no_saved_settings = options.no_saved_settings
 	end
 end
 
-function Dock.Save(Table)
-	if Table ~= nil then
-		local Settings = {}
-		for K, V in pairs(Instances) do
-			if not V.NoSavedSettings then
-				Settings[K] = tostring(V.Window)
+function Dock.save(tbl)
+	if tbl ~= nil then
+		local settings = {}
+		for k, v in pairs(instances) do
+			if not v.no_saved_settings then
+				settings[k] = tostring(v.window)
 			end
 		end
-		Table['Dock'] = Settings
+		tbl["Dock"] = settings
 	end
 end
 
-function Dock.Load(Table)
-	if Table ~= nil then
-		local Settings = Table['Dock']
-		if Settings ~= nil then
-			for K, V in pairs(Settings) do
-				local Instance = GetInstance(K)
-				Instance.Window = V
+function Dock.load(tbl)
+	if tbl ~= nil then
+		local settings = tbl["Dock"]
+		if settings ~= nil then
+			for k, v in pairs(settings) do
+				local instance = get_instance(k)
+				instance.window = v
 			end
 		end
 	end
 end
 
 return Dock
-

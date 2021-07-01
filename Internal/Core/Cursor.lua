@@ -1,235 +1,209 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
-local Utility = require(SLAB_PATH .. '.Internal.Core.Utility')
+local Utility = required("Utility")
 
 local Cursor = {}
 
 local min = math.min
 local max = math.max
 
-local State =
-{
-	X = 0.0,
-	Y = 0.0,
-	PrevX = 0.0,
-	PrevY = 0.0,
-	AnchorX = 0.0,
-	AnchorY = 0.0,
-	ItemX = 0.0,
-	ItemY = 0.0,
-	ItemW = 0.0,
-	ItemH = 0.0,
-	PadX = 4.0,
-	PadY = 4.0,
-	NewLineSize = 16.0,
-	LineY = 0.0,
-	LineH = 0.0,
-	PrevLineY = 0.0,
-	PrevLineH = 0.0
+local state = {
+	x = 0.0,
+	y = 0.0,
+	prev_x = 0.0,
+	prev_y = 0.0,
+	anchor_x = 0.0,
+	anchor_y = 0.0,
+	item_x = 0.0,
+	item_y = 0.0,
+	item_w = 0.0,
+	item_h = 0.0,
+	pad_x = 4.0,
+	pad_y = 4.0,
+	new_line_size = 16.0,
+	line_y = 0.0,
+	line_h = 0.0,
+	prev_line_y = 0.0,
+	prev_line_h = 0.0
 }
 
-local Stack = {}
+local stack = {}
 
-function Cursor.SetPosition(X, Y)
-	State.PrevX = State.X
-	State.PrevY = State.Y
-	State.X = X
-	State.Y = Y
+function Cursor.set_position(x, y)
+	state.prev_x = state.x
+	state.prev_y = state.y
+	state.x = x
+	state.y = y
 end
 
-function Cursor.SetX(X)
-	State.PrevX = State.X
-	State.X = X
+function Cursor.set_x(x)
+	state.prev_x = state.x
+	state.x = x
 end
 
-function Cursor.SetY(Y)
-	State.PrevY = State.Y
-	State.Y = Y
+function Cursor.set_y(y)
+	state.prev_y = state.y
+	state.y = y
 end
 
-function Cursor.SetRelativePosition(X, Y)
-	State.PrevX = State.X
-	State.PrevY = State.Y
-	State.X = State.AnchorX + X
-	State.Y = State.AnchorY + Y
+function Cursor.set_relative_position(x, y)
+	state.prev_x = state.x
+	state.prev_y = state.y
+	state.x = state.anchor_x + x
+	state.y = state.anchor_y + y
 end
 
-function Cursor.SetRelativeX(X)
-	State.PrevX = State.X
-	State.X = State.AnchorX + X
+function Cursor.set_relative_x(x)
+	state.prev_x = state.x
+	state.x = state.anchor_x + x
 end
 
-function Cursor.SetRelativeY(Y)
-	State.PrevY = State.Y
-	State.Y = State.AnchorY + Y
+function Cursor.set_relative_y(y)
+	state.prev_y = state.y
+	state.y = state.anchor_y + y
 end
 
-function Cursor.AdvanceX(X)
-	State.PrevX = State.X
-	State.X = State.X + X + State.PadX
+function Cursor.advance_x(x)
+	state.prev_x = state.x
+	state.x = state.x + x + state.pad_x
 end
 
-function Cursor.AdvanceY(Y)
-	State.X = State.AnchorX
-	State.PrevY = State.Y
-	State.Y = State.Y + Y + State.PadY
-	State.PrevLineY = State.LineY
-	State.PrevLineH = State.LineH
-	State.LineY = 0.0
-	State.LineH = 0.0
+function Cursor.advance_y(y)
+	state.x = state.anchor_x
+	state.prev_y = state.y
+	state.y = state.y + y + state.pad_y
+	state.prev_line_y = state.line_y
+	state.prev_line_h = state.line_h
+	state.line_y = 0.0
+	state.line_h = 0.0
 end
 
-function Cursor.SetAnchor(X, Y)
-	State.AnchorX = X
-	State.AnchorY = Y
+function Cursor.set_anchor(x, y)
+	state.anchor_x = x
+	state.anchor_y = y
 end
 
-function Cursor.SetAnchorX(X)
-	State.AnchorX = X
+function Cursor.set_anchor_x(x)
+	state.anchor_x = x
 end
 
-function Cursor.SetAnchorY(Y)
-	State.AnchorY = Y
+function Cursor.set_anchor_y(y)
+	state.anchor_y = y
 end
 
-function Cursor.GetAnchor()
-	return State.AnchorX, State.AnchorY
+function Cursor.get_anchor()
+	return state.anchor_x, state.anchor_y
 end
 
-function Cursor.GetAnchorX()
-	return State.AnchorX
+function Cursor.get_anchor_x()
+	return state.anchor_x
 end
 
-function Cursor.GetAnchorY()
-	return State.AnchorY
+function Cursor.get_anchor_y()
+	return state.anchor_y
 end
 
-function Cursor.GetPosition()
-	return State.X, State.Y
+function Cursor.get_position()
+	return state.x, state.y
 end
 
-function Cursor.GetX()
-	return State.X
+function Cursor.get_x()
+	return state.x
 end
 
-function Cursor.GetY()
-	return State.Y
+function Cursor.get_y()
+	return state.y
 end
 
-function Cursor.GetRelativePosition()
-	return Cursor.GetRelativeX(), Cursor.GetRelativeY()
+function Cursor.get_relative_position()
+	return Cursor.get_relative_x(), Cursor.get_relative_y()
 end
 
-function Cursor.GetRelativeX()
-	return State.X - State.AnchorX
+function Cursor.get_relative_x()
+	return state.x - state.anchor_x
 end
 
-function Cursor.GetRelativeY()
-	return State.Y - State.AnchorY
+function Cursor.get_relative_y()
+	return state.y - state.anchor_y
 end
 
-function Cursor.SetItemBounds(X, Y, W, H)
-	State.ItemX = X
-	State.ItemY = Y
-	State.ItemW = W
-	State.ItemH = H
-	if State.LineY == 0.0 then
-		State.LineY = Y
+function Cursor.set_item_bounds(x, y, w, h)
+	state.item_x = x
+	state.item_y = y
+	state.item_w = w
+	state.item_h = h
+	if state.line_y == 0.0 then
+		state.line_y = y
 	end
-	State.LineY = min(State.LineY, Y)
-	State.LineH = max(State.LineH, H)
+	state.line_y = min(state.line_y, y)
+	state.line_h = max(state.line_h, h)
 end
 
-function Cursor.GetItemBounds()
-	return State.ItemX, State.ItemY, State.ItemW, State.ItemH
+function Cursor.get_item_bounds()
+	return state.item_x, state.item_y, state.item_w, state.item_h
 end
 
-function Cursor.IsInItemBounds(X, Y)
-	return State.ItemX <= X and X <= State.ItemX + State.ItemW and State.ItemY <= Y and Y <= State.ItemY + State.ItemH
+function Cursor.is_in_item_bounds(x, y)
+	return state.item_x <= x and x <= state.item_x + state.item_w and state.item_y <= y and
+		y <= state.item_y + state.item_h
 end
 
-function Cursor.SameLine(Options)
-	Options = Options == nil and {} or Options
-	Options.Pad = Options.Pad == nil and 0.0 or Options.Pad
-	Options.CenterY = Options.CenterY == nil and false or Options.CenterY
+function Cursor.same_line(options)
+	options = options == nil and {} or options
+	options.pad = options.pad == nil and 0.0 or options.pad
+	options.center_y = options.center_y == nil and false or options.center_y
 
-	State.LineY = State.PrevLineY
-	State.LineH = State.PrevLineH
-	State.X = State.ItemX + State.ItemW + State.PadX + Options.Pad
-	State.Y = State.PrevY
+	state.line_y = state.prev_line_y
+	state.line_h = state.prev_line_h
+	state.x = state.item_x + state.item_w + state.pad_x + options.pad
+	state.y = state.prev_y
 
-	if Options.CenterY then
-		State.Y = State.Y + (State.LineH * 0.5) - (State.NewLineSize * 0.5)
+	if options.center_y then
+		state.y = state.y + (state.line_h * 0.5) - (state.new_line_size * 0.5)
 	end
 end
 
-function Cursor.SetNewLineSize(NewLineSize)
-	State.NewLineSize = NewLineSize
+function Cursor.set_new_line_size(new_line_size)
+	state.new_line_size = new_line_size
 end
 
-function Cursor.GetNewLineSize()
-	return State.NewLineSize
+function Cursor.get_new_line_size()
+	return state.new_line_size
 end
 
-function Cursor.NewLine()
-	Cursor.AdvanceY(State.NewLineSize)
+function Cursor.new_line()
+	Cursor.advance_y(state.new_line_size)
 end
 
-function Cursor.GetLineHeight()
-	return State.PrevLineH
+function Cursor.get_line_height()
+	return state.prev_line_h
 end
 
-function Cursor.PadX()
-	return State.PadX
+function Cursor.pad_x()
+	return state.pad_x
 end
 
-function Cursor.PadY()
-	return State.PadY
+function Cursor.pad_y()
+	return state.pad_y
 end
 
-function Cursor.Indent(Width)
-	State.AnchorX = State.AnchorX + Width
-	State.X = State.AnchorX
+function Cursor.indent(width)
+	state.anchor_x = state.anchor_x + width
+	state.x = state.anchor_x
 end
 
-function Cursor.Unindent(Width)
-	Cursor.Indent(-Width)
+function Cursor.unindent(width)
+	Cursor.indent(-width)
 end
 
-function Cursor.PushContext()
-	table.insert(Stack, 1, Utility.Copy(State))
+function Cursor.push_context()
+	table.insert(stack, 1, Utility.copy(state))
 end
 
-function Cursor.PopContext()
-	if #Stack == 0 then
+function Cursor.pop_context()
+	if #stack == 0 then
 		return
 	end
 
-	State = table.remove(Stack, 1)
+	state = table.remove(stack, 1)
 end
 
 return Cursor

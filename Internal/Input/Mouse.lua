@@ -1,214 +1,190 @@
---[[
-
-MIT License
-
-Copyright (c) 2019-2020 Mitchell Davis <coding.jackalope@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---]]
-
 local insert = table.insert
 
-local Common = require(SLAB_PATH .. '.Internal.Input.Common')
+local Common = required("Common")
 
 local Mouse = {}
 
-local State =
-{
-	X = 0.0,
-	Y = 0.0,
-	DeltaX = 0.0,
-	DeltaY = 0.0,
-	AsyncDeltaX = 0.0,
-	AsyncDeltaY = 0.0,
-	Buttons = {}
+local state = {
+	x = 0.0,
+	y = 0.0,
+	delta_x = 0.0,
+	delta_y = 0.0,
+	async_delta_x = 0.0,
+	async_delta_y = 0.0,
+	buttons = {}
 }
 
-local Cursors = nil
-local CurrentCursor = "arrow"
-local PendingCursor = ""
-local MouseMovedFn = nil
-local MousePressedFn = nil
-local MouseReleasedFn = nil
-local Events = {}
+local cursors = nil
+local current_cursor = "arrow"
+local pending_cursor = ""
+local moused_moved_fn = nil
+local moused_pressed_fn = nil
+local moused_released_fn = nil
+local events = {}
 
-local function OnMouseMoved(X, Y, DX, DY, IsTouch)
-	State.X = X
-	State.Y = Y
-	State.AsyncDeltaX = State.AsyncDeltaX + DX
-	State.AsyncDeltaY = State.AsyncDeltaY + DY
+local function on_mouse_moved(x, y, d_x, d_y, is_touch)
+	state.x = x
+	state.y = y
+	state.async_delta_x = state.async_delta_x + d_x
+	state.async_delta_y = state.async_delta_y + d_y
 end
 
-local function PushEvent(Type, X, Y, Button, IsTouch, Presses)
-	insert(Events, {
-		Type = Type,
-		X = X,
-		Y = Y,
-		Button = Button,
-		IsTouch = IsTouch,
-		Presses = Presses
-	})
+local function push_event(t, x, y, button, is_touch, presses)
+	insert(
+		events,
+		{
+			t = t,
+			x = x,
+			y = y,
+			button = button,
+			is_touch = is_touch,
+			presses = presses
+		}
+	)
 end
 
-local function OnMousePressed(X, Y, Button, IsTouch, Presses)
-	PushEvent(Common.Event.Pressed, X, Y, Button, IsTouch, Presses)
+local function on_mouse_pressed(x, y, button, is_touch, presses)
+	push_event(Common.Event.Pressed, x, y, button, is_touch, presses)
 
-	if MousePressedFn ~= nil then
-		MousePressedFn(X, Y, Button, IsTouch, Presses)
+	if moused_pressed_fn ~= nil then
+		moused_pressed_fn(x, y, button, is_touch, presses)
 	end
 end
 
-local function OnMouseReleased(X, Y, Button, IsTouch, Presses)
-	PushEvent(Common.Event.Released, X, Y, Button, IsTouch, Presses)
+local function on_mouse_released(x, y, button, is_touch, presses)
+	push_event(Common.Event.Released, x, y, button, is_touch, presses)
 
-	if MouseReleasedFn ~= nil then
-		MouseReleasedFn(X, Y, Button, IsTouch, Presses)
+	if moused_released_fn ~= nil then
+		moused_released_fn(x, y, button, is_touch, presses)
 	end
 end
 
-local function ProcessEvents()
-	State.Buttons = {}
+local function process_events()
+	state.buttons = {}
 
-	for I, V in ipairs(Events) do
-		if State.Buttons[V.Button] == nil then
-			State.Buttons[V.Button] = {}
+	for i, v in ipairs(events) do
+		if state.buttons[v.button] == nil then
+			state.buttons[v.button] = {}
 		end
 
-		local Button = State.Buttons[V.Button]
-		Button.Type = V.Type
-		Button.IsTouch = V.IsTouch
-		Button.Presses = V.Presses
+		local Button = state.buttons[v.button]
+		Button.t = v.t
+		Button.is_touch = v.is_touch
+		Button.presses = v.presses
 	end
 
-	Events = {}
+	events = {}
 end
 
-function Mouse.Initialize(Args)
-	MouseMovedFn = love.handlers['mousemoved']
-	MousePressedFn = love.handlers['mousepressed']
-	MouseReleasedFn = love.handlers['mousereleased']
-	love.handlers['mousemoved'] = OnMouseMoved
-	love.handlers['mousepressed'] = OnMousePressed
-	love.handlers['mousereleased'] = OnMouseReleased
+function Mouse.initialize(Args)
+	moused_moved_fn = love.handlers["mousemoved"]
+	moused_pressed_fn = love.handlers["mousepressed"]
+	moused_released_fn = love.handlers["mousereleased"]
+	love.handlers["mousemoved"] = on_mouse_moved
+	love.handlers["mousepressed"] = on_mouse_pressed
+	love.handlers["mousereleased"] = on_mouse_released
 end
 
-function Mouse.Update()
-	ProcessEvents()
+function Mouse.update()
+	process_events()
 
-	State.DeltaX = State.AsyncDeltaX
-	State.DeltaY = State.AsyncDeltaY
-	State.AsyncDeltaX = 0
-	State.AsyncDeltaY = 0
+	state.delta_x = state.async_delta_x
+	state.delta_y = state.async_delta_y
+	state.async_delta_x = 0
+	state.async_delta_y = 0
 
-	if Cursors == nil then
-		Cursors = {}
-		Cursors.Arrow = love.mouse.getSystemCursor('arrow')
-		Cursors.SizeWE = love.mouse.getSystemCursor('sizewe')
-		Cursors.SizeNS = love.mouse.getSystemCursor('sizens')
-		Cursors.SizeNESW = love.mouse.getSystemCursor('sizenesw')
-		Cursors.SizeNWSE = love.mouse.getSystemCursor('sizenwse')
-		Cursors.IBeam = love.mouse.getSystemCursor('ibeam')
-		Cursors.Hand = love.mouse.getSystemCursor('hand')
+	if cursors == nil then
+		cursors = {}
+		cursors.Arrow = love.mouse.getSystemCursor("arrow")
+		cursors.SizeWE = love.mouse.getSystemCursor("sizewe")
+		cursors.SizeNS = love.mouse.getSystemCursor("sizens")
+		cursors.SizeNESW = love.mouse.getSystemCursor("sizenesw")
+		cursors.SizeNWSE = love.mouse.getSystemCursor("sizenwse")
+		cursors.IBeam = love.mouse.getSystemCursor("ibeam")
+		cursors.Hand = love.mouse.getSystemCursor("hand")
 	end
 
-	Mouse.SetCursor('arrow')
+	Mouse.set_cursor("arrow")
 end
 
-function Mouse.IsDown(Button)
-	return love.mouse.isDown(Button)
+function Mouse.is_down(button)
+	return love.mouse.isDown(button)
 end
 
-function Mouse.IsClicked(Button)
-	local Item = State.Buttons[Button]
+function Mouse.is_clicked(button)
+	local item = state.buttons[button]
 
-	if Item == nil or Item.Presses == 0 then
+	if item == nil or item.presses == 0 then
 		return false
 	end
 
-	return Item.Type == Common.Event.Pressed
+	return item.t == Common.Event.Pressed
 end
 
-function Mouse.IsDoubleClicked(Button)
-	local Item = State.Buttons[Button]
+function Mouse.is_double_clicked(button)
+	local item = state.buttons[button]
 
-	if Item == nil or Item.Presses < 2 then
+	if item == nil or item.presses < 2 then
 		return false
 	end
 
-	return Item.Type == Common.Event.Pressed and Item.Presses % 2 == 0
+	return item.t == Common.Event.Pressed and item.presses % 2 == 0
 end
 
-function Mouse.IsReleased(Button)
-	local Item = State.Buttons[Button]
+function Mouse.is_released(button)
+	local item = state.buttons[button]
 
-	if Item == nil then
+	if item == nil then
 		return false
 	end
 
-	return Item.Type == Common.Event.Released
+	return item.t == Common.Event.Released
 end
 
-function Mouse.Position()
-	return State.X, State.Y
+function Mouse.position()
+	return state.x, state.y
 end
 
-function Mouse.HasDelta()
-	return State.DeltaX ~= 0.0 or State.DeltaY ~= 0.0
+function Mouse.has_delta()
+	return state.delta_x ~= 0.0 or state.delta_y ~= 0.0
 end
 
-function Mouse.GetDelta()
-	return State.DeltaX, State.DeltaY
+function Mouse.get_delta()
+	return state.delta_x, state.delta_y
 end
 
-function Mouse.IsDragging(Button)
-	return Mouse.IsDown(Button) and Mouse.HasDelta()
+function Mouse.is_dragging(button)
+	return Mouse.is_down(button) and Mouse.has_delta()
 end
 
-function Mouse.SetCursor(Type)
-	if Cursors == nil then
+function Mouse.set_cursor(t)
+	if cursors == nil then
 		return
 	end
 
-	PendingCursor = Type
+	pending_cursor = t
 end
 
-function Mouse.UpdateCursor()
-	if PendingCursor ~= "" and PendingCursor ~= CurrentCursor then
-		CurrentCursor = PendingCursor
-		PendingCursor = ""
+function Mouse.update_cursor()
+	if pending_cursor ~= "" and pending_cursor ~= current_cursor then
+		current_cursor = pending_cursor
+		pending_cursor = ""
 
-		local Type = CurrentCursor
-		if Type == 'arrow' then
-			love.mouse.setCursor(Cursors.Arrow)
-		elseif Type == 'sizewe' then
-			love.mouse.setCursor(Cursors.SizeWE)
-		elseif Type == 'sizens' then
-			love.mouse.setCursor(Cursors.SizeNS)
-		elseif Type == 'sizenesw' then
-			love.mouse.setCursor(Cursors.SizeNESW)
-		elseif Type == 'sizenwse' then
-			love.mouse.setCursor(Cursors.SizeNWSE)
-		elseif Type == 'ibeam' then
-			love.mouse.setCursor(Cursors.IBeam)
-		elseif Type == 'hand' then
-			love.mouse.setCursor(Cursors.Hand)
+		local t = current_cursor
+		if t == "arrow" then
+			love.mouse.setCursor(cursors.Arrow)
+		elseif t == "sizewe" then
+			love.mouse.setCursor(cursors.SizeWE)
+		elseif t == "sizens" then
+			love.mouse.setCursor(cursors.SizeNS)
+		elseif t == "sizenesw" then
+			love.mouse.setCursor(cursors.SizeNESW)
+		elseif t == "sizenwse" then
+			love.mouse.setCursor(cursors.SizeNWSE)
+		elseif t == "ibeam" then
+			love.mouse.setCursor(cursors.IBeam)
+		elseif t == "hand" then
+			love.mouse.setCursor(cursors.Hand)
 		end
 	end
 end

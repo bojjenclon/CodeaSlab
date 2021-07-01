@@ -17,21 +17,22 @@ local Slab = require 'Slab'
 
 function love.load(args)
 	love.graphics.setBackgroundColor(0.4, 0.88, 1.0)
-	Slab.Initialize(args)
+	Slab.initialize(args)
 end
 
 function love.update(dt)
-	Slab.Update(dt)
-  
-	Slab.BeginWindow('MyFirstWindow', {Title = "My First Window"})
-	Slab.Text("Hello World")
-	Slab.EndWindow()
+	Slab.update(dt)
+
+	Slab.begin_window('MyFirstWindow', {title = "My First Window"})
+	Slab.text("Hello World")
+	Slab.end_window()
 end
 
 function love.draw()
-	Slab.Draw()
+	Slab.draw()
 end
 ```
+
 ![](https://github.com/coding-jackalope/Slab/wiki/Images/Slab_HelloWorld.png)
 
 For more detailed information on usage of this library, refer to the [Wiki](https://github.com/coding-jackalope/Slab/wiki).
@@ -41,7 +42,8 @@ For more detailed information on usage of this library, refer to the [Wiki](http
 Slab is licensed under the MIT license. Please see the LICENSE file for more information.
 
 ### Credits
-* [Dear ImGui](https://github.com/ocornut/imgui) project built by Omar Cornut and various contributors. This project was the inspiration for building an Immediate Mode GUI for Love2D specifically. If anyone is building a game or application in C++, I highly recommend using this library and its rich toolset to speed up development.
-* [Kenney.nl](https://kenney.nl/) and the [Tango Desktop Project](https://opengameart.org/content/tango-desktop-icons) for providing icons used in this project.
-* [lovefs](https://github.com/linux-man/lovefs) provides some FFI code for the filesystem.
-* [luapower/fs](https://github.com/luapower/fs) provides cross platform FFI code for the filesystem.
+
+- [Dear ImGui](https://github.com/ocornut/imgui) project built by Omar Cornut and various contributors. This project was the inspiration for building an Immediate mode GUI for Love2D specifically. If anyone is building a game or application in C++, i highly recommend using this library and its rich toolset to speed up development.
+- [Kenney.nl](https://kenney.nl/) and the [Tango Desktop Project](https://opengameart.org/content/tango-desktop-icons) for providing icons used in this project.
+- [lovefs](https://github.com/linux-man/lovefs) provides some FFI code for the filesystem.
+- [luapower/fs](https://github.com/luapower/fs) provides cross platform FFI code for the filesystem.
